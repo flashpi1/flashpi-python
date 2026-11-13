@@ -8,15 +8,31 @@ class Documents(SyncAPIResource):
                 method="GET", path=path_of("/v1/documents/{}", document_id), options=options
             )
         )
+
+    def list(
+        self, params: DocumentListParams | None = None, **options: Unpack[RequestOptions]
+    ) -> Page[Document]:
+        return self._list(
+            RequestSpec[ListBody[Document]](
+                method="GET", path="/v1/documents", query=params, options=options
+            )
+        )
 ```
 """
 
+from dataclasses import replace
 from typing import TypeVar
 
 from ._http import AsyncEngine, RequestSpec, SyncEngine
-from ._response import record_response
+from ._pagination import AsyncPage, AsyncPaginator, ListBody, Page
+from ._response import APIResponse, record_response
 
 T = TypeVar("T")
+
+
+def _with_cursor(spec: RequestSpec[ListBody[T]], cursor: str) -> RequestSpec[ListBody[T]]:
+    """The same list request for the page after `cursor` (same filters and options)."""
+    return replace(spec, query={**(spec.query or {}), "cursor": cursor})
 
 
 class SyncAPIResource:
@@ -31,6 +47,18 @@ class SyncAPIResource:
         record_response(result)
         return result.data
 
+    def _list(self, spec: RequestSpec[ListBody[T]]) -> Page[T]:
+        """The first page of a list; iterating it walks every page."""
+
+        def fetch(page_spec: RequestSpec[ListBody[T]]) -> APIResponse[Page[T]]:
+            result = self._engine.request(page_spec)
+            page = Page(result.data, lambda cursor: fetch(_with_cursor(spec, cursor)).data)
+            return APIResponse(data=page, response=result.response, request_id=result.request_id)
+
+        first = fetch(spec)
+        record_response(first)
+        return first.data
+
 
 class AsyncAPIResource:
     """Base of the resources of `AsyncFlashpi`."""
@@ -43,3 +71,22 @@ class AsyncAPIResource:
         result = await self._engine.request(spec)
         record_response(result)
         return result.data
+
+    def _list(self, spec: RequestSpec[ListBody[T]]) -> AsyncPaginator[T]:
+        """Awaitable for the first page; `async for` walks every item across pages."""
+
+        async def fetch(page_spec: RequestSpec[ListBody[T]]) -> APIResponse[AsyncPage[T]]:
+            result = await self._engine.request(page_spec)
+
+            async def next_page(cursor: str) -> AsyncPage[T]:
+                return (await fetch(_with_cursor(spec, cursor))).data
+
+            page = AsyncPage(result.data, next_page)
+            return APIResponse(data=page, response=result.response, request_id=result.request_id)
+
+        async def first_page() -> AsyncPage[T]:
+            first = await fetch(spec)
+            record_response(first)
+            return first.data
+
+        return AsyncPaginator(first_page)

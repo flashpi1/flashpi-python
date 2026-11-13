@@ -9,8 +9,9 @@ from typing import Any, Literal, TypeAlias, Unpack, cast
 
 import httpx
 
-from flashpi import AsyncFlashpi, Flashpi, RequestOptions
+from flashpi import AsyncFlashpi, Flashpi, Page, RequestOptions
 from flashpi._http import Multipart, RequestSpec, path_of
+from flashpi._pagination import AsyncPage, AsyncPaginator, ListBody
 from flashpi._resource import AsyncAPIResource, SyncAPIResource
 from flashpi._response import APIResponse, async_response_wrapper, response_wrapper
 
@@ -82,6 +83,16 @@ def problem(
             "x-request-id": "req_problem",
             **(headers or {}),
         },
+    )
+
+
+def page(data: list[Thing], next_cursor: str | None = None) -> httpx.Response:
+    """A list answer."""
+    return json_response(
+        {
+            "data": data,
+            "pagination": {"nextCursor": next_cursor, "hasMore": next_cursor is not None},
+        }
     )
 
 
@@ -197,6 +208,12 @@ class SyncThings(SyncAPIResource):
         spec = RequestSpec[None](method="DELETE", path=path, response_type="none", options=options)
         return self._request(spec)
 
+    def list(self, query: Thing | None = None, **options: Unpack[RequestOptions]) -> Page[Thing]:
+        spec = RequestSpec[ListBody[Thing]](
+            method="GET", path="/v1/things", query=query, options=options
+        )
+        return self._list(spec)
+
     def text(self, thing_id: str, **options: Unpack[RequestOptions]) -> str:
         path = path_of("/v1/things/{}/xml", thing_id)
         accept = "application/xml, application/problem+json"
@@ -226,6 +243,7 @@ class SyncThingsWithResponse:
         self.get = response_wrapper(things.get)
         self.issue = response_wrapper(things.issue)
         self.delete = response_wrapper(things.delete)
+        self.list = response_wrapper(things.list)
 
 
 class AsyncThings(AsyncAPIResource):
@@ -259,6 +277,14 @@ class AsyncThings(AsyncAPIResource):
         spec = RequestSpec[None](method="DELETE", path=path, response_type="none", options=options)
         return await self._request(spec)
 
+    def list(
+        self, query: Thing | None = None, **options: Unpack[RequestOptions]
+    ) -> AsyncPaginator[Thing]:
+        spec = RequestSpec[ListBody[Thing]](
+            method="GET", path="/v1/things", query=query, options=options
+        )
+        return self._list(spec)
+
     async def text(self, thing_id: str, **options: Unpack[RequestOptions]) -> str:
         path = path_of("/v1/things/{}/xml", thing_id)
         accept = "application/xml, application/problem+json"
@@ -290,6 +316,7 @@ class AsyncThingsWithResponse:
         self.get = async_response_wrapper(things.get)
         self.issue = async_response_wrapper(things.issue)
         self.delete = async_response_wrapper(things.delete)
+        self.list = async_response_wrapper(things.list)
 
 
 class SyncTestClient(Flashpi):
@@ -343,3 +370,21 @@ class Api:
             return getattr(self.sync.things.with_response, name)(*args, **kwargs)
         assert self.async_ is not None
         return await getattr(self.async_.things.with_response, name)(*args, **kwargs)
+
+    async def collect(self, query: Thing | None = None, **options: Any) -> list[Thing]:
+        """Every item of a list, across pages."""
+        if self.sync is not None:
+            return list(self.sync.things.list(query, **options))
+        assert self.async_ is not None
+        return [item async for item in self.async_.things.list(query, **options)]
+
+    async def next_page(self, current: Page[Thing] | AsyncPage[Thing]) -> Any:
+        if isinstance(current, Page):
+            return current.next_page()
+        return await current.next_page()
+
+    async def iterate(self, current: Page[Thing] | AsyncPage[Thing]) -> list[Thing]:
+        """Every item of a page and the following ones."""
+        if isinstance(current, Page):
+            return list(current)
+        return [item async for item in current]
