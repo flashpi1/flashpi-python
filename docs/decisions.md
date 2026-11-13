@@ -127,7 +127,8 @@ decided, and are listed so they can be confirmed or changed before 1.0.
 - **Runtimes.** There is no counterpart of Node's browser guard (Pyodide is not refused).
 - **Webhooks.** A signed body that is not a JSON object is refused. A `webhook-id` that cannot
   be encoded as UTF-8 (a framework's surrogate escape of other bytes) ends at
-  `no_matching_signature`, as in Node. Thin endpoints use
+  `no_matching_signature`, as in Node, once a body that is not text or bytes has been refused
+  as `invalid_payload`. Thin endpoints use
   `cast(ThinWebhookEvent, unwrap_webhook(...))`. Headers are any `Mapping`: Flask's
   `request.headers` (Werkzeug's `Headers`) is not one, although it works at run time, so the
   README passes `dict(request.headers)`.

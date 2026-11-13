@@ -256,6 +256,14 @@ class TestVerifyWebhookSignature:
         assert caught.value.__cause__ is None
         assert caught.value.__suppress_context__
 
+    def test_refuses_a_parsed_body_before_a_webhook_id_that_is_not_utf8(self) -> None:
+        # Node builds the signed bytes with TextEncoder, which never fails, then refuses the body.
+        garbled = {**headers_of(FLASHPI), "webhook-id": "msg_\udcff"}
+        check = lambda: verify_webhook_signature(  # noqa: E731
+            cast("str", json.loads(FLASHPI.body)), garbled, FLASHPI.secret, now=at(FLASHPI)
+        )
+        assert reason(check) == "invalid_payload"
+
     def test_reads_headers_in_any_letter_case_and_joins_repeated_signatures(self) -> None:
         class MultiHeaders(Mapping[str, str]):
             """Headers whose items repeat a name, like Starlette's."""

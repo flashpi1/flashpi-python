@@ -79,6 +79,7 @@ def verify_webhook_signature(
             f"The webhook-timestamp is more than {tolerance_seconds:g} seconds away from now",
         )
 
+    body = _payload_bytes(payload)
     try:
         prefix = f"{webhook_id}.{timestamp}.".encode()
     except UnicodeEncodeError:
@@ -87,7 +88,7 @@ def verify_webhook_signature(
         raise WebhookVerificationError(
             "no_matching_signature", "No webhook-signature matches the body and the secret"
         ) from None
-    if _signed(signer, prefix + _payload_bytes(payload), signatures):
+    if _signed(signer, prefix + body, signatures):
         return
     raise WebhookVerificationError(
         "no_matching_signature", "No webhook-signature matches the body and the secret"
