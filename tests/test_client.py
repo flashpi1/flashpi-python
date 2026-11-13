@@ -193,6 +193,28 @@ class TestRequests:
         await api.call("status")
         assert api.sent[0].headers["authorization"] == f"Bearer {TEST_KEY}"
 
+    @pytest.mark.parametrize(
+        "pasted",
+        [f"\ufeff{TEST_KEY}\ufeff", f" \ufeff \ufeff{TEST_KEY}", f"\u3000{TEST_KEY}\u2028"],
+        ids=["byte order marks", "alternating", "unicode spaces"],
+    )
+    async def test_trims_what_javascripts_trim_removes_around_a_key(
+        self, make: MakeApi, pasted: str
+    ) -> None:
+        api = make(json_response({}), api_key=pasted)
+        assert api.client.environment == "test"
+        await api.call("status")
+        assert api.sent[0].headers["authorization"] == f"Bearer {TEST_KEY}"
+
+    async def test_trims_a_byte_order_mark_around_the_environment_variable(
+        self, make: MakeApi, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("FLASHPI_API_KEY", f"\ufeff{TEST_KEY}\n")
+        api = make(json_response({}), api_key=None)
+        assert api.client.environment == "test"
+        await api.call("status")
+        assert api.sent[0].headers["authorization"] == f"Bearer {TEST_KEY}"
+
     async def test_sends_a_json_body_with_an_idempotency_key_on_post(self, make: MakeApi) -> None:
         api = make(json_response({"id": ID}, 201))
         await api.call("create", {"ruc": "0993411372001", "name": "Panadería Ñandú"})

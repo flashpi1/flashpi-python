@@ -43,6 +43,10 @@ DEFAULT_MAX_RETRIES = 2
 
 _API_KEY_CHARACTERS = re.compile(r"[\x21-\x7e]+")
 """What an API key is made of: visible ASCII, without spaces."""
+_JS_SPACE = r"[\t\n\v\f\r \xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+_AROUND = re.compile(rf"\A{_JS_SPACE}+|{_JS_SPACE}+\Z")
+"""What JavaScript's `trim()` removes around a string, the Node SDK's key included: its white
+space and line breaks, and the byte order mark (U+FEFF) that `str.strip()` keeps."""
 
 
 def _configure(
@@ -90,9 +94,10 @@ def _is_http_url(url: object) -> bool:
 
 
 def _api_key(api_key: str | None) -> tuple[str, Environment]:
-    """The key (the argument or FLASHPI_API_KEY, trimmed) and the environment its prefix sets."""
+    """The key (the argument or FLASHPI_API_KEY, trimmed as JavaScript's `trim()`, the byte order
+    mark included) and the environment its prefix sets."""
     value: object = os.environ.get("FLASHPI_API_KEY") if api_key is None else api_key
-    key = value.strip() if isinstance(value, str) else ""
+    key = _AROUND.sub("", value) if isinstance(value, str) else ""
     if not key:
         raise FlashpiError(
             "Missing API key: pass it to Flashpi(api_key=...) or set the FLASHPI_API_KEY "

@@ -96,10 +96,11 @@ decided, and are listed so they can be confirmed or changed before 1.0.
   `Transfer-Encoding` raise `ValueError` too, since httpx sets them from the body (Node's fetch
   refuses `Transfer-Encoding` before sending and fails a wrong `Content-Length` while sending).
   The messages never show the value.
-- **API key.** Besides the prefix, the key must be visible ASCII without spaces: a key with a
-  space, a line break, a control character or a character outside ASCII raises `FlashpiError`
-  when the client is created, without showing the key (Node sends inner spaces and leaks a key
-  with a line break in its `TypeError`).
+- **API key.** It is trimmed as Node's `trim()` does, a byte order mark (U+FEFF) included.
+  Besides the prefix, the key must be visible ASCII without spaces: a key with a space, a line
+  break, a control character or a character outside ASCII raises `FlashpiError` when the client
+  is created, without showing the key (Node sends inner spaces and leaks a key with a line break
+  in its `TypeError`).
 - **Requests.** On `Flashpi`, the deadline of an attempt is checked as each chunk of the answer
   arrives: until the answer starts, httpx limits connecting, sending, waiting for a pooled
   connection and waiting for the answer to the timeout each, and one stalled read can add up to
