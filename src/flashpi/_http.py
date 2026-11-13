@@ -90,6 +90,11 @@ class Multipart:
     files: Mapping[str, tuple[str, bytes, str]]
     """Files: part name to (file name, content, content type)."""
 
+    def __repr__(self) -> str:
+        # Only the part names: the values are a .p12 and its password, and a repr ends up in
+        # tracebacks and in error trackers that record local variables (`spec`, `step`).
+        return f"Multipart(fields={list(self.fields)!r}, files={list(self.files)!r})"
+
 
 @dataclass(frozen=True, kw_only=True)
 class RequestSpec(Generic[T]):

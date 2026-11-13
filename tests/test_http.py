@@ -19,6 +19,7 @@ from flashpi._http import (
     retry_delay,
 )
 from flashpi._response import async_response_wrapper, response_wrapper
+from flashpi.resources.uploads import certificate_form
 
 TEST_KEY = f"fp_test_{'a' * 48}"
 
@@ -94,6 +95,15 @@ class TestBuildHeaders:
         headers = build_headers(config(), spec, options, None)
         assert "content-type" not in headers
         assert "idempotency-key" not in headers
+
+    def test_never_shows_a_certificate_or_its_password_in_a_repr(self) -> None:
+        form = certificate_form({"file": b"0\x82P12-CONTENT", "password": "MyP12Passw0rd"})
+        spec = RequestSpec[Any](method="POST", path="/v1/issuers/i/certificates", multipart=form)
+        step = http_module.Attempt("POST", "https://h/v1", httpx.Headers(), None, form, 60, "json")
+        for shown in (repr(form), repr(spec), repr(step)):
+            assert "MyP12Passw0rd" not in shown
+            assert "P12-CONTENT" not in shown
+        assert repr(form) == "Multipart(fields=['password'], files=['file'])"
 
     def test_never_shows_the_key_in_a_repr(self) -> None:
         headers = build_headers(config(), RequestSpec[Any](method="GET", path="/"), {}, None)
