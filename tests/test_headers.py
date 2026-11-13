@@ -3,11 +3,13 @@ before anything is sent, as the Node SDK's `Headers` does: the spaces around a v
 and a line break, another control character or a bad name fails at once instead of reaching h11,
 which would refuse it on every attempt, retried as a network failure."""
 
+from traceback import format_exception
 from typing import Any
 
+import httpx
 import pytest
 
-from flashpi import AsyncFlashpi, BadRequestError, Flashpi, FlashpiError
+from flashpi import APIConnectionError, AsyncFlashpi, BadRequestError, Flashpi, FlashpiError
 from tests.conftest import MakeApi
 from tests.support import TEST_KEY, Clock, json_response, problem
 
@@ -132,3 +134,25 @@ class TestTheClientSettings:
     ) -> None:
         with pytest.raises(FlashpiError, match="Idempotency-Key"):
             client_class(TEST_KEY, default_headers={"Idempotency-Key": " k "})
+
+
+class TestARequestHttpxRefuses:
+    """What still reaches h11 and is refused there (LocalProtocolError) is not retried, and its
+    message, which quotes the refused header, is left out: it may be the Authorization header."""
+
+    async def test_is_a_flashpi_error_without_httpxs_reason(
+        self, make: MakeApi, clock: Clock
+    ) -> None:
+        refused = httpx.LocalProtocolError(f"Illegal header value b'Bearer {TEST_KEY}'")
+        api = make(refused, json_response({}))
+        with pytest.raises(FlashpiError, match="was not sent: httpx refused it") as caught:
+            await api.call("create", {}, idempotency_key="order-1")
+        error = caught.value
+        assert not isinstance(error, APIConnectionError)
+        assert error.idempotency_key == "order-1"
+        shown = [str(error), repr(error), *format_exception(error)]
+        assert not any(TEST_KEY in text for text in shown)
+        assert error.__cause__ is None
+        assert error.__suppress_context__
+        assert len(api.sent) == 1
+        assert clock.sleeps == []

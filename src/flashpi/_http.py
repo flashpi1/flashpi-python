@@ -500,6 +500,12 @@ def timeout_error(step: Attempt) -> APITimeoutError:
     return APITimeoutError(f"{step.method} {step.url} timed out after {seconds} seconds")
 
 
+def invalid_request_error(step: Attempt) -> FlashpiError:
+    """httpx refused to send the request (h11's LocalProtocolError). Not retried, and without
+    httpx's reason, which quotes the header it refused: that may be the Authorization header."""
+    return FlashpiError(f"{step.method} {step.url} was not sent: httpx refused it as invalid HTTP")
+
+
 def connection_error(step: Attempt, error: Exception) -> APIConnectionError:
     reason = str(error) or type(error).__name__
     return APIConnectionError(f"{step.method} {step.url} failed: {reason}")
@@ -565,6 +571,8 @@ class SyncEngine:
                 response.close()
         except httpx.TimeoutException as error:
             raise timeout_error(step) from error
+        except httpx.LocalProtocolError:
+            raise invalid_request_error(step) from None
         except httpx.RequestError as error:
             raise connection_error(step, error) from error
         return read_response(response, step.response_type)
@@ -632,6 +640,8 @@ class AsyncEngine:
                 response = await self.http_client.send(request, follow_redirects=False)
         except (TimeoutError, httpx.TimeoutException) as error:
             raise timeout_error(step) from error
+        except httpx.LocalProtocolError:
+            raise invalid_request_error(step) from None
         except httpx.RequestError as error:
             raise connection_error(step, error) from error
         return read_response(response, step.response_type)
