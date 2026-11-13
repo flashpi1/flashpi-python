@@ -1,6 +1,7 @@
 """The Flashpi clients: `Flashpi` (sync) and `AsyncFlashpi` (asyncio), with the same API."""
 
 import os
+import re
 from collections.abc import Mapping
 from types import TracebackType
 from typing import Self, cast
@@ -39,6 +40,9 @@ DEFAULT_TIMEOUT = 60.0
 """Seconds each attempt of a request may take, from sending it to reading the whole answer (the
 Node SDK's 60 000 ms)."""
 DEFAULT_MAX_RETRIES = 2
+
+_API_KEY_CHARACTERS = re.compile(r"[\x21-\x7e]+")
+"""What an API key is made of: visible ASCII, without spaces."""
 
 
 def _configure(
@@ -101,6 +105,12 @@ def _api_key(api_key: str | None) -> tuple[str, Environment]:
         )
     if not key.startswith(("fp_test_", "fp_live_")):
         raise FlashpiError("The API key must start with fp_test_ or fp_live_")
+    if not _API_KEY_CHARACTERS.fullmatch(key):
+        # Never the key: httpx would refuse it in the Authorization header and quote it.
+        raise FlashpiError(
+            "The API key has spaces, line breaks or other characters an API key cannot have: "
+            "copy it again from the Flashpi console"
+        )
     return key, "test" if key.startswith("fp_test_") else "live"
 
 

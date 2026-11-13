@@ -1,6 +1,7 @@
 """The clients and the requests they send (Node: test/client.test.ts)."""
 
 import re
+from traceback import format_exception
 
 import httpx
 import pytest
@@ -61,6 +62,26 @@ class TestTheClient:
             client_class("whsec_abc")
         with pytest.raises(FlashpiError, match="fp_test_ or fp_live_"):
             client_class("sk_test_123")
+
+    @pytest.mark.parametrize("inner", ["\n", "\r\n", "\x00", " ", "\t", "\x7f", "ñ"])
+    def test_refuses_a_key_with_characters_a_key_cannot_have_without_showing_it(
+        self, client_class: type[Flashpi | AsyncFlashpi], inner: str
+    ) -> None:
+        for key in (f"fp_live_SECRETPART{inner}SECRETTAIL", f"fp_test_SECRETPART{inner}TAIL"):
+            with pytest.raises(FlashpiError, match="copy it again") as caught:
+                client_class(key)
+            shown = [str(caught.value), repr(caught.value), *format_exception(caught.value)]
+            assert not any("SECRET" in text for text in shown)
+            assert caught.value.__cause__ is None
+            assert caught.value.__context__ is None
+
+    def test_refuses_such_a_key_from_the_environment_variable(
+        self, client_class: type[Flashpi | AsyncFlashpi], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("FLASHPI_API_KEY", "fp_live_SECRETPART\nSECRETTAIL")
+        with pytest.raises(FlashpiError, match="copy it again") as caught:
+            client_class()
+        assert "SECRET" not in str(caught.value)
 
     @pytest.mark.parametrize(
         ("options", "message"),
