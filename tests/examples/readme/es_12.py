@@ -12,6 +12,6 @@ from flashpi import Flashpi
 flashpi = Flashpi(
     api_key=os.environ["FLASHPI_API_KEY"],  # por defecto, la variable FLASHPI_API_KEY
     language="es",  # idioma de los mensajes: "en" (por defecto) o "es"
-    timeout=60,  # segundos por intento (el SDK lo amplía al emitir con waitForAuthorization)
+    timeout=60,  # segundos por intento (con waitForAuthorization, al menos la espera + 15 s)
     max_retries=2,  # 0 desactiva los reintentos
 )
