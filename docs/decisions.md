@@ -51,7 +51,7 @@ decided, and are listed so they can be confirmed or changed before 1.0.
   AbortController: `AsyncFlashpi` wraps the attempt in `asyncio.timeout()` (cancelling the task
   still cancels the call), and `Flashpi` limits each network operation of the attempt to the
   time it has left, so an answer that trickles in times out too (with a caller's `http_client`,
-  see Requests below).
+  see the sync client's deadline below).
 - **Porting choices the owner confirmed on 2026-11-13.** Chosen while porting, then confirmed
   as proposed:
   - `list()` takes its filters as a dict with the API's camelCase keys,
@@ -70,6 +70,55 @@ decided, and are listed so they can be confirmed or changed before 1.0.
     `ValueError` (unknown option names, a body that is not JSON, bad webhook `tolerance` or
     `now`, header names or values that are not text, a .p12 that is not bytes or a binary file);
     bad timeouts, `max_retries`, ids, `base_url` and API key stay `FlashpiError`, as in Node.
+- **Choices the owner confirmed after the two reviews (2026-11-13).** Chosen while fixing what
+  two adversarial reviews found, then confirmed as proposed:
+  - **Headers.** Every value that becomes a header (`idempotency_key`, `correlation_id`,
+    `language`, `extra_headers`, and the client's `default_headers` and `language`) is checked
+    by the SDK before anything is sent, so a bad one is never retried as a network failure. As
+    Node's `Headers`, the spaces, tabs and line breaks around a value are trimmed, and the
+    trimmed Idempotency-Key is the one on errors. A line break, NUL or another control character
+    other than a tab left inside a value, or a name that is not an RFC 9110 token, raises
+    `ValueError` (Node: a `TypeError` from `Headers`; for control characters other than CR, LF
+    and NUL, Node fails only when sending, as a retried network error); a value that is not
+    text raises `TypeError` (Node turns it into text). Text outside ASCII is sent as UTF-8, as
+    httpx does, on every request and in `default_headers`; a lone surrogate (a framework's
+    escape of bytes that are not UTF-8), which has no UTF-8, raises `ValueError`.
+    `Content-Length` and `Transfer-Encoding` raise `ValueError` too, since httpx sets them from
+    the body (Node's fetch refuses `Transfer-Encoding` before sending and fails a wrong
+    `Content-Length` while sending). An empty `language`, or one of spaces only, is not sent, as
+    in Node: a call keeps the client's language, and a client sends none. The messages never
+    show the value.
+  - **A request httpx refuses.** A request httpx refuses to write (h11's `LocalProtocolError`)
+    raises a `FlashpiError` at once, not a retried `APIConnectionError`, and without httpx's
+    reason, which quotes the refused header (possibly the Authorization one).
+  - **API key.** It is trimmed as Node's `trim()` does, a byte order mark (U+FEFF) included.
+    Besides the prefix, the key must be visible ASCII without spaces: a key with a space, a line
+    break, a control character or a character outside ASCII raises `FlashpiError` when the
+    client is created, without showing the key (Node sends inner spaces and leaks a key with a
+    line break in its `TypeError`; the Node SDK should get the same rule).
+  - **The sync client's deadline.** On `Flashpi`, the httpx client the SDK creates gets a
+    network backend that limits connecting, the TLS handshake, each write and each read of an
+    attempt to the time the attempt has left, also through the proxies of the environment,
+    which it keeps. It reaches httpcore, which httpx always installs, through private attributes
+    of httpx and httpcore that the tests pin. It is fail-safe: a version of httpx or httpcore
+    without them leaves the client with httpx's own limits instead of failing, and the network
+    tests then fail in CI, so the change is seen before a release. Only a DNS lookup, which
+    Python cannot interrupt, and connecting to a host that has several addresses can run past
+    the deadline. A caller's own `http_client` is left as it is: the deadline is checked as
+    each chunk of the answer's body arrives and once the answer is read, while before the body
+    httpx limits connecting, each write, waiting for a pooled connection and each read of the
+    status line and headers to the timeout one by one, so headers that trickle in can keep an
+    attempt going far past its timeout, and a body that the client's own response hooks read is
+    checked only once it has been read.
+  - **Certificate files.** A file object is read once, in pieces, up to one byte past 1 MiB (a
+    bigger file is refused without being read whole, as "more than 1048576 bytes"), and not
+    closed; an async reader (`async def read`) is refused with `TypeError`, and a non-blocking
+    stream with no data ready (its `read()` returns None) with `FlashpiError`.
+  - **A pinned release build.** The release's build job pins uv 0.13.6 (the newest release out
+    for at least two weeks) by version and by the SHA-256 of its archive, and builds with
+    hatchling 1.33.0 and its dependencies fixed by version and hash (`build.in`,
+    `build-constraints.txt`), so a compromised new release of either cannot reach the files
+    published to PyPI. Both are updated by hand.
 
 ### Chosen while porting (to confirm)
 
@@ -80,51 +129,14 @@ decided, and are listed so they can be confirmed or changed before 1.0.
   `webhook_endpoints.rotate_secret(id)` no body when no body is given;
   `documents.send_email(id)` always sends `{}`.
 - **Errors.** .p12 contents (empty, over 1 MiB, password not text) raise `FlashpiError`, as in
-  Node. A request httpx refuses to write (h11's `LocalProtocolError`) raises a `FlashpiError`
-  at once, not a retried `APIConnectionError`, and without httpx's reason, which quotes the
-  refused header (possibly the Authorization one).
-- **Headers.** Every value that becomes a header (`idempotency_key`, `correlation_id`,
-  `language`, `extra_headers`, and the client's `default_headers` and `language`) is checked by
-  the SDK before anything is sent, so a bad one is never retried as a network failure. As Node's
-  `Headers`, the spaces, tabs and line breaks around a value are trimmed, and the trimmed
-  Idempotency-Key is the one on errors. A line break, NUL or another control character other
-  than a tab left inside a value, or a name that is not an RFC 9110 token, raises `ValueError`
-  (Node: a `TypeError` from `Headers`; for control characters other than CR, LF and NUL, Node
-  fails only when sending, as a retried network error); a value that is not text raises
-  `TypeError` (Node turns it into text). Text outside ASCII is sent as UTF-8, as httpx does, on
-  every request and in `default_headers`; a lone surrogate (a framework's escape of bytes that
-  are not UTF-8), which has no UTF-8, raises `ValueError`. `Content-Length` and
-  `Transfer-Encoding` raise `ValueError` too, since httpx sets them from the body (Node's fetch
-  refuses `Transfer-Encoding` before sending and fails a wrong `Content-Length` while sending).
-  An empty `language`, or one of spaces only, is not sent, as in Node: a call keeps the client's
-  language, and a client sends none.
-  The messages never show the value.
-- **API key.** It is trimmed as Node's `trim()` does, a byte order mark (U+FEFF) included.
-  Besides the prefix, the key must be visible ASCII without spaces: a key with a space, a line
-  break, a control character or a character outside ASCII raises `FlashpiError` when the client
-  is created, without showing the key (Node sends inner spaces and leaks a key with a line break
-  in its `TypeError`).
-- **Requests.** On `Flashpi`, the httpx client the SDK creates gets a network backend that
-  limits connecting, the TLS handshake, each write and each read of an attempt to the time the
-  attempt has left, also through the proxies of the environment, which it keeps. It reaches
-  httpcore, which httpx always installs, through private attributes of httpx and httpcore that
-  the tests pin. Only a DNS lookup, which Python cannot interrupt, and connecting to a host that
-  has several addresses can run past the deadline. With a caller's `http_client`, the deadline
-  is checked as each chunk of the answer's body arrives and once the answer is read: before the
-  body, httpx limits connecting, each write, waiting for a pooled connection and each read of
-  the status line and headers to the timeout one by one, so headers that trickle in can keep an
-  attempt going far past its timeout, and a body that the client's own response hooks read is
-  checked only once it has been read. The in-progress wait counts wall time. Timeouts are capped
-  at 2147483.647 s, Node's `setTimeout` limit, only so both SDKs accept the same values. A 3xx
-  answer raises `APIError`, `base_url` must be an http(s) URL with a host, and the client closes
-  only an httpx client it created. In an issue with `options.waitForAuthorization`, a
-  `waitTimeoutSeconds` that is not a number counts as the default 15. A .p12 upload sends the
-  password field before the file, whose content type is always `application/x-pkcs12`. A file
-  object is read once, in pieces, up to one byte past 1 MiB (a bigger file is refused without
-  being read whole, as "more than 1048576 bytes"), and not closed; an async reader
-  (`async def read`) is refused with `TypeError`, and a non-blocking stream with no data ready
-  (its `read()` returns None) with `FlashpiError`. The repr of a multipart body lists only its
-  part names, never the .p12 or its password.
+  Node.
+- **Requests.** The in-progress wait counts wall time. Timeouts are capped at 2147483.647 s,
+  Node's `setTimeout` limit, only so both SDKs accept the same values. A 3xx answer raises
+  `APIError`, `base_url` must be an http(s) URL with a host, and the client closes only an httpx
+  client it created. In an issue with `options.waitForAuthorization`, a `waitTimeoutSeconds`
+  that is not a number counts as the default 15. A .p12 upload sends the password field before
+  the file, whose content type is always `application/x-pkcs12`. The repr of a multipart body
+  lists only its part names, never the .p12 or its password.
 - **Secrets in tracebacks.** Error trackers record the local variables of every frame an error
   passes through, and scrub them by name (`api_key`, `secret`, `password`) at best. So no frame
   of the SDK that an error passes through keeps the SDK's secrets under another name: a webhook
