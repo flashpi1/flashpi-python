@@ -16,6 +16,8 @@ _HTTP_WHITESPACE = " \t\r\n"
 """Trimmed from both ends of a header value, as the Fetch standard's `Headers` does."""
 _CONTROL = re.compile(r"[\x00-\x08\x0a-\x1f\x7f]")
 """What h11 refuses inside a header value: control characters other than the tab."""
+_SURROGATE = re.compile(r"[\ud800-\udfff]")
+"""Lone surrogates (a framework's escape of bytes that are not UTF-8): they have no UTF-8."""
 
 
 def valid_timeout(name: str, value: object) -> float:
@@ -52,13 +54,18 @@ def header_value(label: str, value: object) -> str:
     Checked by the SDK itself before anything is sent, so a bad value is never retried as a
     network failure (h11 refuses it once the request is on its way): TypeError when it is not
     text (httpx 0.27 and 0.28 fail on those differently), ValueError when a line break or another
-    control character is left. The message never shows the value, which may be a secret.
+    control character other than a tab is left, or a lone surrogate, which has no UTF-8. Other
+    text outside ASCII is sent as UTF-8. The message never shows the value, which may be a
+    secret.
     """
     if not isinstance(value, str):
         raise TypeError(f"{label} must be str, not {type(value).__name__}")
     trimmed = value.strip(_HTTP_WHITESPACE)
     if _CONTROL.search(trimmed):
         raise ValueError(f"{label} has a line break or another control character")
+    if _SURROGATE.search(trimmed):
+        # httpx would raise a UnicodeEncodeError that carries the whole value.
+        raise ValueError(f"{label} has a character that cannot be sent as UTF-8")
     return trimmed
 
 

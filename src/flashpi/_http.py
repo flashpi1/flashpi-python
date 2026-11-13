@@ -387,7 +387,12 @@ def idempotency_key_of(method: Method, options: RequestOptions) -> str | None:
     key = options.get("idempotency_key")
     if key is not None:
         return key
-    header = httpx.Headers(options.get("extra_headers") or {}).get("idempotency-key")
+    # The last spelling wins, as in `build_headers`. Not through httpx.Headers(mapping), which
+    # encodes the values as ASCII and joins repeated names.
+    header = None
+    for name, value in (options.get("extra_headers") or {}).items():
+        if name.lower() == "idempotency-key":
+            header = value
     return header if header is not None else str(uuid.uuid4())
 
 

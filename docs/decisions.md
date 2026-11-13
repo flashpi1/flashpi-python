@@ -86,12 +86,13 @@ decided, and are listed so they can be confirmed or changed before 1.0.
   `language`, `extra_headers`, and the client's `default_headers` and `language`) is checked by
   the SDK before anything is sent, so a bad one is never retried as a network failure. As Node's
   `Headers`, the spaces, tabs and line breaks around a value are trimmed, and the trimmed
-  Idempotency-Key is the one on errors. A line break, NUL or another control character left
-  inside a value, or a name that is not an RFC 9110 token, raises `ValueError` (Node: a
-  `TypeError` from `Headers`; for control characters other than CR, LF and NUL, Node fails only
-  when sending, as a retried network error); a value that is not text raises `TypeError` (Node
-  turns it into text). The messages never show the value. Text outside ASCII is sent as UTF-8,
-  as httpx does.
+  Idempotency-Key is the one on errors. A line break, NUL or another control character other
+  than a tab left inside a value, or a name that is not an RFC 9110 token, raises `ValueError`
+  (Node: a `TypeError` from `Headers`; for control characters other than CR, LF and NUL, Node
+  fails only when sending, as a retried network error); a value that is not text raises
+  `TypeError` (Node turns it into text). Text outside ASCII is sent as UTF-8, as httpx does, on
+  every request and in `default_headers`; a lone surrogate (a framework's escape of bytes that
+  are not UTF-8), which has no UTF-8, raises `ValueError`. The messages never show the value.
 - **API key.** Besides the prefix, the key must be visible ASCII without spaces: a key with a
   space, a line break, a control character or a character outside ASCII raises `FlashpiError`
   when the client is created, without showing the key (Node sends inner spaces and leaks a key

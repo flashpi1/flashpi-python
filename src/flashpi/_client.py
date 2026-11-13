@@ -58,7 +58,7 @@ def _configure(
     headers = checked_headers("default_headers", default_headers)
     if language is not None:
         language = cast("Language", header_value("language", language))
-    if "idempotency-key" in httpx.Headers(headers):
+    if any(name.lower() == "idempotency-key" for name in headers):
         raise FlashpiError(
             "default_headers cannot carry an Idempotency-Key: it must be unique per operation. "
             "Pass idempotency_key= to each create() instead"

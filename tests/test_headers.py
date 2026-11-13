@@ -45,6 +45,25 @@ class TestTrimming:
         assert raw[b"x-note"] == b"a b\tc"
         assert raw[b"x-name"] == "Ñandú".encode()
 
+    async def test_sends_text_outside_ascii_as_utf8_on_a_post_and_in_default_headers(
+        self, make: MakeApi
+    ) -> None:
+        api = make(json_response({}, 201), default_headers={"x-env": "Peñafiel"})
+        await api.call("create", {}, extra_headers={"x-name": "Ñandú"})
+        raw = dict(api.sent[0].headers.raw)
+        assert raw[b"x-name"] == "Ñandú".encode()
+        assert raw[b"x-env"] == "Peñafiel".encode()
+
+    async def test_takes_the_last_spelling_of_a_repeated_idempotency_key_header(
+        self, make: MakeApi
+    ) -> None:
+        api = make(problem(400, "validation_failed"))
+        repeated = {"Idempotency-Key": "order-1", "idempotency-key": "order-2"}
+        with pytest.raises(BadRequestError) as caught:
+            await api.call("create", {}, extra_headers=repeated)
+        assert api.sent[0].headers.get_list("idempotency-key") == ["order-2"]
+        assert caught.value.idempotency_key == "order-2"
+
     async def test_puts_the_trimmed_idempotency_key_on_errors(self, make: MakeApi) -> None:
         api = make(problem(400, "validation_failed"))
         with pytest.raises(BadRequestError) as caught:
@@ -77,6 +96,24 @@ class TestRefusingBeforeSending:
             assert "X-Injected" not in str(caught.value)
         assert api.sent == []
         assert clock.sleeps == []
+
+    async def test_refuses_a_lone_surrogate_in_any_value_without_showing_it(
+        self, make: MakeApi
+    ) -> None:
+        api = make()
+        value = "tok\ud800en-SECRET"
+        calls: list[dict[str, Any]] = [
+            {"idempotency_key": value},
+            {"correlation_id": value},
+            {"language": value},
+            {"extra_headers": {"x-tenant": value}},
+        ]
+        for options in calls:
+            with pytest.raises(ValueError, match="cannot be sent as UTF-8") as caught:
+                await api.call("create", {}, **options)
+            assert "SECRET" not in str(caught.value)
+            assert "SECRET" not in repr(caught.value)
+        assert api.sent == []
 
     @pytest.mark.parametrize("name", BAD_NAMES)
     async def test_refuses_a_bad_header_name(self, make: MakeApi, name: str) -> None:
@@ -113,6 +150,13 @@ class TestTheClientSettings:
             client_class(TEST_KEY, default_headers={"x-env": value})
         with pytest.raises(ValueError, match="language has a line break"):
             client_class(TEST_KEY, language=value)  # pyright: ignore[reportArgumentType]
+
+    def test_refuses_a_lone_surrogate_in_default_headers_without_showing_it(
+        self, client_class: type[Flashpi | AsyncFlashpi]
+    ) -> None:
+        with pytest.raises(ValueError, match="'x-env' has a character that cannot") as caught:
+            client_class(TEST_KEY, default_headers={"x-env": "tok\ud800en-SECRET"})
+        assert "SECRET" not in str(caught.value)
 
     @pytest.mark.parametrize("name", BAD_NAMES)
     def test_refuses_a_bad_default_header_name(
