@@ -1,0 +1,226 @@
+"""The Flashpi clients: `Flashpi` (sync) and `AsyncFlashpi` (asyncio), with the same API."""
+
+import os
+from collections.abc import Mapping
+from types import TracebackType
+from typing import Self, cast
+
+import httpx
+
+from ._errors import FlashpiError
+from ._http import AsyncEngine, ClientConfig, SyncEngine
+from ._validate import valid_retries, valid_timeout
+from .types import Environment, Language
+
+DEFAULT_BASE_URL = "https://api.flashpi.com.ec"
+DEFAULT_TIMEOUT = 60.0
+"""Seconds to wait for each attempt of a request (the Node SDK's 60 000 ms)."""
+DEFAULT_MAX_RETRIES = 2
+
+
+def _configure(
+    api_key: str | None,
+    *,
+    base_url: str | None,
+    timeout: float | None,
+    max_retries: int | None,
+    language: Language | None,
+    default_headers: Mapping[str, str] | None,
+) -> tuple[ClientConfig, Environment]:
+    key, environment = _api_key(api_key)
+    headers = dict(default_headers or {})
+    if "idempotency-key" in httpx.Headers(headers):
+        raise FlashpiError(
+            "default_headers cannot carry an Idempotency-Key: it must be unique per operation. "
+            "Pass idempotency_key= to each create() instead"
+        )
+    url = DEFAULT_BASE_URL if base_url is None else base_url
+    parsed = httpx.URL(url)
+    if parsed.scheme not in ("http", "https") or not parsed.host:
+        raise FlashpiError(f"base_url must be an http:// or https:// URL, got {url!r}")
+    config = ClientConfig(
+        api_key=key,
+        base_url=url,
+        timeout=valid_timeout("timeout", DEFAULT_TIMEOUT if timeout is None else timeout),
+        max_retries=valid_retries(
+            "max_retries", DEFAULT_MAX_RETRIES if max_retries is None else max_retries
+        ),
+        language=language,
+        default_headers=headers,
+    )
+    return config, environment
+
+
+def _api_key(api_key: str | None) -> tuple[str, Environment]:
+    """The key (the argument or FLASHPI_API_KEY, trimmed) and the environment its prefix sets."""
+    value: object = os.environ.get("FLASHPI_API_KEY") if api_key is None else api_key
+    key = value.strip() if isinstance(value, str) else ""
+    if not key:
+        raise FlashpiError(
+            "Missing API key: pass it to Flashpi(api_key=...) or set the FLASHPI_API_KEY "
+            "environment variable"
+        )
+    if key.startswith("fp_test_"):
+        return key, "test"
+    if key.startswith("fp_live_"):
+        return key, "live"
+    if key.startswith("whsec_"):
+        raise FlashpiError(
+            "That is a webhook signing secret (whsec_...), not an API key: use it with "
+            "flashpi.webhooks"
+        )
+    raise FlashpiError("The API key must start with fp_test_ or fp_live_")
+
+
+def _describe(client: object, environment: Environment, config: ClientConfig) -> str:
+    # Never the API key.
+    return f"{type(client).__name__}(environment={environment!r}, base_url={config.base_url!r})"
+
+
+class Flashpi:
+    """The Flashpi API client.
+
+    ```python
+    from flashpi import Flashpi
+
+    with Flashpi() as flashpi:  # reads FLASHPI_API_KEY
+        invoice = flashpi.invoices.create({...})
+    ```
+
+    An `fp_test_` key issues in the SRI test environment (pruebas); an `fp_live_` key issues real
+    documents in production. Use it on servers only: the key must stay secret.
+    """
+
+    environment: Environment
+    """`test` for fp_test_ keys (SRI pruebas), `live` for fp_live_ keys (SRI production)."""
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        *,
+        base_url: str | None = None,
+        timeout: float | None = None,
+        max_retries: int | None = None,
+        language: Language | None = None,
+        default_headers: Mapping[str, str] | None = None,
+        http_client: httpx.Client | None = None,
+    ) -> None:
+        """Creates a client.
+
+        Args:
+            api_key: The API key (`fp_test_...` or `fp_live_...`). Defaults to the
+                FLASHPI_API_KEY environment variable.
+            base_url: The API's address (default https://api.flashpi.com.ec).
+            timeout: Seconds to wait for each attempt of a request (default 60). Issuing in sync
+                mode raises it to the wait plus 15 seconds by itself.
+            max_retries: Retries after network errors, timeouts, 429 and 5xx (default 2; 0 turns
+                them off).
+            language: Language of the API's messages: `en` (default) or `es`. Error codes do not
+                change.
+            default_headers: Headers sent with every request (not `Idempotency-Key`: that one is
+                per request).
+            http_client: An `httpx.Client` to send the requests with (proxies, tests). The SDK
+                never follows redirects, and leaves closing this client to you.
+        """
+        config, self.environment = _configure(
+            api_key,
+            base_url=base_url,
+            timeout=timeout,
+            max_retries=max_retries,
+            language=language,
+            default_headers=default_headers,
+        )
+        if http_client is not None and not isinstance(cast("object", http_client), httpx.Client):
+            raise TypeError(
+                "http_client must be an httpx.Client (AsyncFlashpi takes an httpx.AsyncClient)"
+            )
+        self._owns_http_client = http_client is None
+        self._http_client = http_client or httpx.Client(follow_redirects=False)
+        self._engine = SyncEngine(config, self._http_client)
+
+    def close(self) -> None:
+        """Closes the connections, unless the http_client came from you."""
+        if self._owns_http_client:
+            self._http_client.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.close()
+
+    def __repr__(self) -> str:
+        return _describe(self, self.environment, self._engine.config)
+
+
+class AsyncFlashpi:
+    """The Flashpi API client for asyncio, with the same API as `Flashpi`.
+
+    ```python
+    from flashpi import AsyncFlashpi
+
+    async with AsyncFlashpi() as flashpi:  # reads FLASHPI_API_KEY
+        invoice = await flashpi.invoices.create({...})
+    ```
+
+    An `fp_test_` key issues in the SRI test environment (pruebas); an `fp_live_` key issues real
+    documents in production. Use it on servers only: the key must stay secret.
+    """
+
+    environment: Environment
+    """`test` for fp_test_ keys (SRI pruebas), `live` for fp_live_ keys (SRI production)."""
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        *,
+        base_url: str | None = None,
+        timeout: float | None = None,
+        max_retries: int | None = None,
+        language: Language | None = None,
+        default_headers: Mapping[str, str] | None = None,
+        http_client: httpx.AsyncClient | None = None,
+    ) -> None:
+        """Creates a client. The arguments are the ones of `Flashpi`, with an
+        `httpx.AsyncClient` as `http_client`."""
+        config, self.environment = _configure(
+            api_key,
+            base_url=base_url,
+            timeout=timeout,
+            max_retries=max_retries,
+            language=language,
+            default_headers=default_headers,
+        )
+        if http_client is not None and not isinstance(
+            cast("object", http_client), httpx.AsyncClient
+        ):
+            raise TypeError(
+                "http_client must be an httpx.AsyncClient (Flashpi takes an httpx.Client)"
+            )
+        self._owns_http_client = http_client is None
+        self._http_client = http_client or httpx.AsyncClient(follow_redirects=False)
+        self._engine = AsyncEngine(config, self._http_client)
+
+    async def aclose(self) -> None:
+        """Closes the connections, unless the http_client came from you."""
+        if self._owns_http_client:
+            await self._http_client.aclose()
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        await self.aclose()
+
+    def __repr__(self) -> str:
+        return _describe(self, self.environment, self._engine.config)
