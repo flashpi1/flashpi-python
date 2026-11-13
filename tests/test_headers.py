@@ -18,6 +18,7 @@ pytestmark = pytest.mark.anyio
 CLIENTS = [Flashpi, AsyncFlashpi]
 BAD_VALUES = ["a\r\nX-Injected: 1", "a\nb", "a\rb", "a\x00b", "a\x0bb", "a\x0cb", "a\x7fb"]
 BAD_NAMES = ["x tenant", "x:t", "", "x\r\ny", "x-ñ", "(x)"]
+FRAMING = ["Content-Length", "content-length", "Transfer-Encoding", "TRANSFER-ENCODING"]
 
 
 class TestTrimming:
@@ -122,6 +123,18 @@ class TestRefusingBeforeSending:
             await api.call("status", extra_headers={name: "v"})
         assert api.sent == []
 
+    @pytest.mark.parametrize("name", FRAMING)
+    async def test_refuses_a_header_that_frames_the_body(self, make: MakeApi, name: str) -> None:
+        api = make()
+        for value in ["0", "99", "chunked"]:
+            with pytest.raises(ValueError, match=f"'{name}' is set by the SDK from the body"):
+                await api.call("create", {"a": 1}, extra_headers={name: value})
+            with pytest.raises(ValueError, match="is set by the SDK from the body"):
+                await api.call("status", extra_headers={name: value})
+            with pytest.raises(ValueError, match="is set by the SDK from the body"):
+                await api.call("upload", b"p12", "secret", extra_headers={name: value})
+        assert api.sent == []
+
     @pytest.mark.parametrize("option", ["idempotency_key", "correlation_id", "language"])
     async def test_refuses_an_option_that_is_not_text(self, make: MakeApi, option: str) -> None:
         api = make()
@@ -164,6 +177,13 @@ class TestTheClientSettings:
     ) -> None:
         with pytest.raises(ValueError, match="is not a valid header name"):
             client_class(TEST_KEY, default_headers={name: "v"})
+
+    @pytest.mark.parametrize("name", FRAMING)
+    def test_refuses_a_default_header_that_frames_the_body(
+        self, client_class: type[Flashpi | AsyncFlashpi], name: str
+    ) -> None:
+        with pytest.raises(ValueError, match=f"'{name}' is set by the SDK from the body"):
+            client_class(TEST_KEY, default_headers={name: "chunked"})
 
     def test_refuses_a_language_or_default_headers_of_the_wrong_type(
         self, client_class: type[Flashpi | AsyncFlashpi]

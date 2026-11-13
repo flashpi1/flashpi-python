@@ -92,7 +92,10 @@ decided, and are listed so they can be confirmed or changed before 1.0.
   fails only when sending, as a retried network error); a value that is not text raises
   `TypeError` (Node turns it into text). Text outside ASCII is sent as UTF-8, as httpx does, on
   every request and in `default_headers`; a lone surrogate (a framework's escape of bytes that
-  are not UTF-8), which has no UTF-8, raises `ValueError`. The messages never show the value.
+  are not UTF-8), which has no UTF-8, raises `ValueError`. `Content-Length` and
+  `Transfer-Encoding` raise `ValueError` too, since httpx sets them from the body (Node's fetch
+  refuses `Transfer-Encoding` before sending and fails a wrong `Content-Length` while sending).
+  The messages never show the value.
 - **API key.** Besides the prefix, the key must be visible ASCII without spaces: a key with a
   space, a line break, a control character or a character outside ASCII raises `FlashpiError`
   when the client is created, without showing the key (Node sends inner spaces and leaks a key

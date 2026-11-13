@@ -16,6 +16,9 @@ _HTTP_WHITESPACE = " \t\r\n"
 """Trimmed from both ends of a header value, as the Fetch standard's `Headers` does."""
 _CONTROL = re.compile(r"[\x00-\x08\x0a-\x1f\x7f]")
 """What h11 refuses inside a header value: control characters other than the tab."""
+_FRAMING = frozenset({"content-length", "transfer-encoding"})
+"""Headers httpx sets from the body: another value would frame the body wrongly (h11 fails
+after the headers, Authorization included, are sent)."""
 _SURROGATE = re.compile(r"[\ud800-\udfff]")
 """Lone surrogates (a framework's escape of bytes that are not UTF-8): they have no UTF-8."""
 
@@ -70,7 +73,9 @@ def header_value(label: str, value: object) -> str:
 
 
 def checked_headers(label: str, headers: object) -> dict[str, str]:
-    """The headers of a mapping, each name and value checked (`header_name`, `header_value`)."""
+    """The headers of a mapping, each name and value checked (`header_name`, `header_value`).
+    Content-Length and Transfer-Encoding are refused (ValueError): httpx sets them from the
+    body."""
     if headers is None:
         return {}
     if not isinstance(headers, Mapping):
@@ -78,5 +83,7 @@ def checked_headers(label: str, headers: object) -> dict[str, str]:
     checked: dict[str, str] = {}
     for name, value in cast("Mapping[object, object]", headers).items():
         valid = header_name(name)
+        if valid.lower() in _FRAMING:
+            raise ValueError(f"{valid!r} is set by the SDK from the body: leave it out")
         checked[valid] = header_value(f"The value of header {valid!r}", value)
     return checked
