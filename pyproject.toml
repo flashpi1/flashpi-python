@@ -71,7 +71,10 @@ typeCheckingMode = "strict"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--strict-markers --strict-config -ra --cov --cov-report=term-missing:skip-covered"
+addopts = "--strict-markers --strict-config -ra -m 'not live' --cov --cov-report=term-missing:skip-covered"
+markers = [
+  "live: calls the real Flashpi API in test mode; run with `uv run pytest -m live --no-cov`",
+]
 
 [tool.coverage.run]
 source = ["flashpi"]
