@@ -35,6 +35,12 @@ from .issuers import (
     Issuers,
 )
 from .status import AsyncStatusResource, StatusResource
+from .webhook_endpoints import (
+    AsyncWebhookDeliveries,
+    AsyncWebhookEndpoints,
+    WebhookDeliveries,
+    WebhookEndpoints,
+)
 
 __all__ = [
     "AsyncCertificates",
@@ -51,6 +57,8 @@ __all__ = [
     "AsyncPurchaseSettlements",
     "AsyncStatusResource",
     "AsyncWaybills",
+    "AsyncWebhookDeliveries",
+    "AsyncWebhookEndpoints",
     "AsyncWithholdings",
     "Certificates",
     "CreditNotes",
@@ -66,5 +74,7 @@ __all__ = [
     "PurchaseSettlements",
     "StatusResource",
     "Waybills",
+    "WebhookDeliveries",
+    "WebhookEndpoints",
     "Withholdings",
 ]

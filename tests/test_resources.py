@@ -193,7 +193,83 @@ CASES = [
         f"/v1/issuer-onboardings/{ONBOARDING}/complete",
         body={"ruc": "1790012345001"},
     ),
+    Case(
+        "webhook_endpoints.create",
+        ({"url": "https://x"},),
+        "POST",
+        "/v1/webhook-endpoints",
+        body={"url": "https://x"},
+    ),
+    Case("webhook_endpoints.list", (), "GET", "/v1/webhook-endpoints", reply=empty_page),
+    Case("webhook_endpoints.get", (ENDPOINT,), "GET", f"/v1/webhook-endpoints/{ENDPOINT}"),
+    Case(
+        "webhook_endpoints.update",
+        (ENDPOINT, {"disabled": True}),
+        "PATCH",
+        f"/v1/webhook-endpoints/{ENDPOINT}",
+        body={"disabled": True},
+    ),
+    Case(
+        "webhook_endpoints.delete",
+        (ENDPOINT,),
+        "DELETE",
+        f"/v1/webhook-endpoints/{ENDPOINT}",
+        reply=no_content,
+    ),
+    Case(
+        "webhook_endpoints.get_secret",
+        (ENDPOINT,),
+        "GET",
+        f"/v1/webhook-endpoints/{ENDPOINT}/secret",
+    ),
+    Case(
+        "webhook_endpoints.rotate_secret",
+        (ENDPOINT, {"previousSecretExpiresInHours": 0}),
+        "POST",
+        f"/v1/webhook-endpoints/{ENDPOINT}/rotate-secret",
+        body={"previousSecretExpiresInHours": 0},
+    ),
+    Case(
+        "webhook_endpoints.rotate_secret",
+        (ENDPOINT,),
+        "POST",
+        f"/v1/webhook-endpoints/{ENDPOINT}/rotate-secret",
+        label="webhook_endpoints.rotate_secret (no body)",
+    ),
+    Case(
+        "webhook_endpoints.verify",
+        (ENDPOINT,),
+        "POST",
+        f"/v1/webhook-endpoints/{ENDPOINT}/verify",
+    ),
+    Case(
+        "webhook_endpoints.deliveries.list",
+        (ENDPOINT, {"status": "failed"}),
+        "GET",
+        f"/v1/webhook-endpoints/{ENDPOINT}/deliveries",
+        query={"status": "failed"},
+        reply=empty_page,
+    ),
+    Case(
+        "webhook_endpoints.deliveries.get",
+        (ENDPOINT, DELIVERY),
+        "GET",
+        f"/v1/webhook-endpoints/{ENDPOINT}/deliveries/{DELIVERY}",
+    ),
+    Case(
+        "webhook_endpoints.deliveries.replay",
+        (ENDPOINT, DELIVERY),
+        "POST",
+        f"/v1/webhook-endpoints/{ENDPOINT}/deliveries/{DELIVERY}/replay",
+    ),
 ]
+
+
+def test_covers_the_45_operations_of_the_api() -> None:
+    # issuers.certificates.upload, issuer_onboardings.create, documents.xml and documents.pdf
+    # have their own tests below; test_operations.py checks every one against the contract.
+    operations = {(case.method, case.path) for case in CASES}
+    assert len(operations) + 4 == 45
 
 
 @pytest.mark.parametrize("case", CASES, ids=lambda case: case.label or case.name)
@@ -620,3 +696,42 @@ class TestIssuerOnboardings:
         api = make(json_response({"id": ONBOARDING}, 201))
         result = await api.op_with_response(f"issuer_onboardings.{name}", *args)
         assert (result.data, result.response.status_code) == ({"id": ONBOARDING}, 201)
+
+
+WEBHOOK_CALLS: list[tuple[str, tuple[Any, ...], Callable[[], httpx.Response]]] = [
+    ("webhook_endpoints.create", (EMPTY,), empty_object),
+    ("webhook_endpoints.list", (), empty_page),
+    ("webhook_endpoints.get", (ENDPOINT,), empty_object),
+    ("webhook_endpoints.update", (ENDPOINT, EMPTY), empty_object),
+    ("webhook_endpoints.delete", (ENDPOINT,), no_content),
+    ("webhook_endpoints.get_secret", (ENDPOINT,), empty_object),
+    ("webhook_endpoints.rotate_secret", (ENDPOINT,), empty_object),
+    ("webhook_endpoints.verify", (ENDPOINT,), empty_object),
+    ("webhook_endpoints.deliveries.list", (ENDPOINT,), empty_page),
+    ("webhook_endpoints.deliveries.get", (ENDPOINT, DELIVERY), empty_object),
+    ("webhook_endpoints.deliveries.replay", (ENDPOINT, DELIVERY), empty_object),
+]
+
+
+class TestWebhookEndpoints:
+    async def test_reads_the_signing_secret(self, make: MakeApi) -> None:
+        secret = {"secret": "whsec_abc", "previousSecretExpiresAt": None}
+        api = make(json_response(secret))
+        assert await api.op("webhook_endpoints.get_secret", ENDPOINT) == secret
+
+    async def test_walks_the_deliveries_of_an_endpoint(self, make: MakeApi) -> None:
+        api = make(page([{"id": "del_1"}], "c1"), page([{"id": "del_2"}]))
+        params = {"status": "failed", "eventType": "invoice.authorized", "eventId": EVENT}
+        first = await api.op("webhook_endpoints.deliveries.list", ENDPOINT, params)
+        assert [delivery["id"] for delivery in await api.iterate(first)] == ["del_1", "del_2"]
+        assert dict(api.sent[1].url.params) == {**params, "cursor": "c1"}
+        assert api.sent[1].url.path == f"/v1/webhook-endpoints/{ENDPOINT}/deliveries"
+
+    @pytest.mark.parametrize(("name", "args", "reply"), WEBHOOK_CALLS)
+    async def test_returns_the_response_with_with_response(
+        self, make: MakeApi, name: str, args: tuple[Any, ...], reply: Callable[[], httpx.Response]
+    ) -> None:
+        api = make(reply())
+        result = await api.op_with_response(name, *args)
+        assert isinstance(result, APIResponse)
+        assert result.response.request.url.path == api.sent[0].url.path

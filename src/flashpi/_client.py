@@ -31,6 +31,7 @@ from .resources.events import AsyncEvents, Events
 from .resources.issuer_onboardings import AsyncIssuerOnboardings, IssuerOnboardings
 from .resources.issuers import AsyncIssuers, Issuers
 from .resources.status import AsyncStatusResource, StatusResource
+from .resources.webhook_endpoints import AsyncWebhookEndpoints, WebhookEndpoints
 from .types import Environment, Language
 
 DEFAULT_BASE_URL = "https://api.flashpi.com.ec"
@@ -151,6 +152,9 @@ class Flashpi:
     issuer_onboardings: IssuerOnboardings
     """Create an issuer from its .p12 certificate."""
 
+    webhook_endpoints: WebhookEndpoints
+    """The URLs Flashpi sends events to."""
+
     events: Events
     """Events of documents, certificates and email sending."""
 
@@ -212,6 +216,7 @@ class Flashpi:
         self.documents = Documents(self._engine)
         self.issuers = Issuers(self._engine)
         self.issuer_onboardings = IssuerOnboardings(self._engine)
+        self.webhook_endpoints = WebhookEndpoints(self._engine)
         self.events = Events(self._engine)
         self.status = StatusResource(self._engine)
         self.webhooks = Webhooks()
@@ -280,6 +285,9 @@ class AsyncFlashpi:
     issuer_onboardings: AsyncIssuerOnboardings
     """Create an issuer from its .p12 certificate."""
 
+    webhook_endpoints: AsyncWebhookEndpoints
+    """The URLs Flashpi sends events to."""
+
     events: AsyncEvents
     """Events of documents, certificates and email sending."""
 
@@ -328,6 +336,7 @@ class AsyncFlashpi:
         self.documents = AsyncDocuments(self._engine)
         self.issuers = AsyncIssuers(self._engine)
         self.issuer_onboardings = AsyncIssuerOnboardings(self._engine)
+        self.webhook_endpoints = AsyncWebhookEndpoints(self._engine)
         self.events = AsyncEvents(self._engine)
         self.status = AsyncStatusResource(self._engine)
         self.webhooks = Webhooks()
