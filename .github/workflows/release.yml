@@ -106,7 +106,8 @@ jobs:
           name: dist
           path: dist/
           if-no-files-found: error
-          retention-days: 1
+          # The publish job waits for the pypi environment's approval, for up to 30 days.
+          retention-days: 30
 
   # The only job that can get a PyPI token (trusted publishing through the `pypi` environment).
   # It checks out nothing, installs nothing and runs no code of this repository or of its

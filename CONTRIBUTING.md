@@ -102,7 +102,10 @@ The release builds in two jobs. The build job checks out the tag, builds the sdi
 with no cache and checks them (`scripts/package_check.py`), with a read-only token and no secret.
 The publish job, the only one allowed to get a PyPI token, checks out nothing and runs no code:
 it downloads those files and uploads them. It runs in the `pypi` environment, which waits for a
-maintainer's approval in GitHub before it publishes.
+maintainer's approval in GitHub before it publishes. The build job keeps the files for 30 days,
+as long as GitHub waits for that approval. If the publish job fails because they expired anyway,
+open the run and re-run the "Build the release" job alone (not "Re-run all jobs", which skips the
+release once it exists): the publish job runs again after it and waits for approval.
 
 ### PyPI trusted publishing
 
