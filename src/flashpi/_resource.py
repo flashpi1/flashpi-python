@@ -41,11 +41,15 @@ class SyncAPIResource:
     def __init__(self, engine: SyncEngine) -> None:
         self._engine = engine
 
-    def _request(self, spec: RequestSpec[T]) -> T:
-        """Sends the request (with its retries) and returns its data."""
+    def _call(self, spec: RequestSpec[T]) -> APIResponse[T]:
+        """Sends the request (with its retries) and returns its data with the response."""
         result = self._engine.request(spec)
         record_response(result)
-        return result.data
+        return result
+
+    def _request(self, spec: RequestSpec[T]) -> T:
+        """Sends the request (with its retries) and returns its data."""
+        return self._call(spec).data
 
     def _list(self, spec: RequestSpec[ListBody[T]]) -> Page[T]:
         """The first page of a list; iterating it walks every page."""
@@ -66,11 +70,15 @@ class AsyncAPIResource:
     def __init__(self, engine: AsyncEngine) -> None:
         self._engine = engine
 
-    async def _request(self, spec: RequestSpec[T]) -> T:
-        """Sends the request (with its retries) and returns its data."""
+    async def _call(self, spec: RequestSpec[T]) -> APIResponse[T]:
+        """Sends the request (with its retries) and returns its data with the response."""
         result = await self._engine.request(spec)
         record_response(result)
-        return result.data
+        return result
+
+    async def _request(self, spec: RequestSpec[T]) -> T:
+        """Sends the request (with its retries) and returns its data."""
+        return (await self._call(spec)).data
 
     def _list(self, spec: RequestSpec[ListBody[T]]) -> AsyncPaginator[T]:
         """Awaitable for the first page; `async for` walks every item across pages."""

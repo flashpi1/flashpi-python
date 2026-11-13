@@ -56,7 +56,7 @@ class Page(_BasePage[T]):
     Iterate it with `for` to walk this page and every following one, fetching them as needed:
 
     ```python
-    for document in flashpi.documents.list(status="authorized"):
+    for document in flashpi.documents.list({"status": "authorized"}):
         print(document["accessKey"])
     ```
     """
@@ -108,7 +108,7 @@ class AsyncPaginator(Generic[T]):
     Await it for the first page, or iterate it with `async for` to walk every item across pages:
 
     ```python
-    async for document in flashpi.documents.list(status="authorized"):
+    async for document in flashpi.documents.list({"status": "authorized"}):
         print(document["accessKey"])
     ```
     """
