@@ -44,7 +44,17 @@ build-backend = "hatchling.build"
 packages = ["src/flashpi"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/flashpi", "tests", "README.md", "README.en.md", "CHANGELOG.md", "LICENSE"]
+# The sources and what their tests need, so the tests run from the sdist.
+include = [
+  "src/flashpi",
+  "tests",
+  "scripts",
+  "openapi/openapi.json",
+  "README.md",
+  "README.en.md",
+  "CHANGELOG.md",
+  "LICENSE",
+]
 
 [tool.ruff]
 line-length = 100
@@ -55,15 +65,34 @@ src = ["src", "tests", "scripts"]
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "C4", "PT", "RUF", "S", "N", "ANN", "TID", "PL"]
 ignore = ["PLR0913", "PLR2004"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["flashpi", "scripts", "tests"]
+
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "ANN", "PLR"]
 "scripts/**" = ["S", "T20"]
+# Generated from the OpenAPI document: its descriptions are the API's own texts.
+"src/flashpi/types/_generated.py" = ["E501", "RUF001", "RUF002", "RUF003"]
 
 [tool.pyright]
 include = ["src", "tests", "scripts"]
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
+# The bits of Django, Flask and FastAPI the README examples use (tests/examples/readme).
+stubPath = "tests/examples/typings"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--strict-markers --strict-config -ra"
+addopts = "--strict-markers --strict-config -ra -m 'not live' --cov --cov-report=term-missing:skip-covered"
+markers = [
+  "live: calls the real Flashpi API in test mode; run with `uv run pytest -m live --no-cov`",
+]
+
+[tool.coverage.run]
+source = ["flashpi"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+exclude_also = ["if TYPE_CHECKING:", "@overload"]

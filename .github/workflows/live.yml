@@ -1,0 +1,44 @@
+name: Live API test
+
+# Runs tests/live against the real Flashpi API in test mode (SRI pruebas): it issues ONE test
+# invoice on the shared demo issuer (daily quota of 50 per account). So it only runs when the
+# Release workflow dispatches it on release-please's pull request, or by hand.
+#
+# Needs the organization secret FLASHPI_TEST_API_KEY (an fp_test_ key with read_write access)
+# and the organization variable FLASHPI_DEMO_ISSUER_ID (the demo issuer id from the console),
+# both shared with flashpi-node.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-api
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: SDK against the live API (test mode)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - run: uv sync --locked
+      - name: Check the secret and the variable are set
+        env:
+          FLASHPI_TEST_API_KEY: ${{ secrets.FLASHPI_TEST_API_KEY }}
+          FLASHPI_DEMO_ISSUER_ID: ${{ vars.FLASHPI_DEMO_ISSUER_ID }}
+        run: |
+          if [ -z "$FLASHPI_TEST_API_KEY" ] || [ -z "$FLASHPI_DEMO_ISSUER_ID" ]; then
+            echo "::error::Set the FLASHPI_TEST_API_KEY secret and the FLASHPI_DEMO_ISSUER_ID variable"
+            exit 1
+          fi
+      - name: Run the live suite
+        env:
+          FLASHPI_TEST_API_KEY: ${{ secrets.FLASHPI_TEST_API_KEY }}
+          FLASHPI_DEMO_ISSUER_ID: ${{ vars.FLASHPI_DEMO_ISSUER_ID }}
+        run: uv run --no-sync pytest -m live --no-cov

@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # By hand: gh workflow run ci.yml --ref <branch>. Such a run does not count for a pull
+  # request's required checks, which only take push and pull_request runs.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Third-party actions are pinned to full commit SHAs (the comment is the release).
+jobs:
+  verify:
+    name: Lint, typecheck and test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv (Python from .python-version)
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Check the generated API types match the committed OpenAPI document
+        run: uv run --no-sync python scripts/openapi.py check
+
+      - name: Check the README examples match the READMEs
+        run: uv run --no-sync python scripts/readme.py check
+
+      - name: Lint
+        run: uv run --no-sync ruff check --output-format=github .
+
+      - name: Check formatting
+        run: uv run --no-sync ruff format --check .
+
+      - name: Typecheck (pyright strict, with the README examples)
+        run: uv run --no-sync pyright
+
+      - name: Test with coverage
+        run: uv run --no-sync pytest
+
+  python:
+    name: Python ${{ matrix.python }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12', '3.13', '3.14', '3.15']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --locked
+      - run: uv run --no-sync pytest
+
+  lowest:
+    name: Lowest dependencies (Python 3.11)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: '3.11'
+      # The oldest versions pyproject.toml allows for each direct dependency (httpx 0.27). This
+      # resolves again and rewrites uv.lock in the runner only.
+      - name: Install the lowest direct dependencies
+        run: |
+          uv sync --resolution lowest-direct
+          uv run --no-sync python -c 'import httpx; print("httpx", httpx.__version__)'
+      - run: uv run --no-sync pytest
+
+  build:
+    name: Build and install
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      # With the release's pinned build backend, so every pull request checks build-constraints.txt.
+      - name: Build the sdist and the wheel
+        run: uv build --no-sources --build-constraints build-constraints.txt --require-hashes
+
+      - name: Check what PyPI would get
+        run: uv run --no-project python scripts/package_check.py
+
+      - name: Install the wheel in a clean environment and use it
+        run: |
+          for python in 3.11 3.15; do
+            venv="${RUNNER_TEMP}/clean-${python}"
+            uv venv --python "$python" "$venv"
+            uv pip install --python "${venv}/bin/python" dist/*.whl
+            "${venv}/bin/python" scripts/installed_check.py
+          done

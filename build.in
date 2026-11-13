@@ -1,0 +1,2 @@
+# The build backend of the release, pinned (see CONTRIBUTING.md).
+hatchling==1.33.0
