@@ -89,12 +89,16 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
           persist-credentials: false
-      # No cache in a release build: nothing restored from a cache may reach the release.
+      # No cache in a release build: nothing restored from a cache may reach the release. uv is
+      # pinned by version and by the SHA-256 of its Linux x86_64 archive, and the build backend
+      # by build-constraints.txt (exact versions with hashes); see CONTRIBUTING.md to update them.
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
+          version: '0.13.6'
+          checksum: 'f29c3e94ffabd7e6f3ba521dba169a9b7ec12100bf3257087f0f24f6123f3645'
           enable-cache: false
       - name: Build the sdist and the wheel
-        run: uv build --no-sources
+        run: uv build --no-sources --build-constraints build-constraints.txt --require-hashes
       - name: Check them against the tag
         env:
           TAG: ${{ needs.release-please.outputs.tag_name }}

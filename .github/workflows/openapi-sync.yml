@@ -63,7 +63,7 @@ jobs:
           uv run --no-sync ruff check .
           uv run --no-sync pyright
           uv run --no-sync pytest
-          uv build --no-sources
+          uv build --no-sources --build-constraints build-constraints.txt --require-hashes
 
       - name: Hand the new contract over
         if: steps.diff.outputs.changed == 'true'

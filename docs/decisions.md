@@ -161,15 +161,20 @@ decided, and are listed so they can be confirmed or changed before 1.0.
   dependencies (httpx 0.27); and a build whose wheel and sdist are checked file by file
   (`scripts/package_check.py`) and whose wheel is installed alone and used on 3.11 and 3.15. The
   sdist carries the tests and what they need, so they run from it. setup-uv installs the latest
-  uv (in the release's build job too, which holds no secret); the lockfile is checked with
-  `--locked`.
+  uv, except in the release's build job, which pins it by version and by the SHA-256 of its
+  archive; the lockfile is checked with `--locked`.
 - **Releases.** release-please's `python` type updates `pyproject.toml`; `_version.py` and the
   package's entry in `uv.lock` are extra files, since `uv sync --locked` fails when the lockfile
   and `pyproject.toml` disagree. A build job, with a read-only token and no secret, builds the
-  tag with `uv build --no-sources` and no cache and checks the files. The publish job, the only
+  tag with `uv build --no-sources --build-constraints build-constraints.txt --require-hashes`
+  and no cache and checks the files. The publish job, the only
   one with the `id-token` permission, checks out nothing and runs no code of the repository or
   of its dependencies (not even the build backend): it downloads those files and uploads them
   with trusted publishing and PEP 740 attestations. Neither runs the tests (CI ran them on the
-  release PR). The build backend is not pinned beyond `hatchling>=1.33`. PyPI accepts a pending
+  release PR). The build backend is pinned for every build of the workflows: `build.in` names
+  hatchling 1.33.0, and `build-constraints.txt`, generated from it with
+  `uv pip compile --generate-hashes`, fixes it and its dependencies by version and hash, so the
+  build refuses anything else (Dependabot does not update it). `pyproject.toml` keeps
+  `hatchling>=1.33`, so others can still build the sdist. PyPI accepts a pending
   publisher before the project exists, so unlike npm, 0.1.0 is published by the workflow too.
   PyPI shows `README.md`, the Spanish one, as npm does.

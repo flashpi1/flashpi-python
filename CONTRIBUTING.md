@@ -29,9 +29,15 @@ uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run 
 - CI also runs the tests on Python 3.11 to 3.15, and on Python 3.11 with the oldest version of
   each direct dependency (`uv sync --resolution lowest-direct`, which rewrites `uv.lock`: do it in
   a scratch copy).
-- `uv build && uv run python scripts/package_check.py` builds the sdist and the wheel and fails on
-  anything missing or extra in them. CI then installs the wheel alone in a clean environment and
-  runs `scripts/installed_check.py` with it.
+- This builds the sdist and the wheel with the release's pinned build backend and fails on
+  anything missing or extra in them; CI then installs the wheel alone in a clean environment and
+  runs `scripts/installed_check.py` with it:
+
+  ```bash
+  uv build --no-sources --build-constraints build-constraints.txt --require-hashes
+  uv run python scripts/package_check.py
+  ```
+
 - `uv run pytest -m live --no-cov` calls the real API in test mode. It needs
   `FLASHPI_TEST_API_KEY` (an `fp_test_` key, read_write) and `FLASHPI_DEMO_ISSUER_ID` (in CI,
   an organization secret and variable shared with flashpi-node), and issues one test invoice on
@@ -106,6 +112,23 @@ maintainer's approval in GitHub before it publishes. The build job keeps the fil
 as long as GitHub waits for that approval. If the publish job fails because they expired anyway,
 open the run and re-run the "Build the release" job alone (not "Re-run all jobs", which skips the
 release once it exists): the publish job runs again after it and waits for approval.
+
+### Pinned build tools
+
+The release's build job pins uv and the build backend, so no newer release of either reaches a
+published version by itself. Dependabot updates neither:
+
+- The build backend: `build.in` names the hatchling version, and `build-constraints.txt` fixes it
+  and its dependencies with their hashes. Every build in the workflows uses it, so CI checks it on
+  each pull request. To update it, change `build.in` if needed, then run:
+
+  ```bash
+  uv pip compile build.in --generate-hashes --universal --python-version 3.11 -o build-constraints.txt
+  ```
+
+- uv: `version` and `checksum` of setup-uv in `release.yml`'s build job. The checksum is the
+  SHA-256 of `uv-x86_64-unknown-linux-gnu.tar.gz` in that uv release (its `.sha256` file, or the
+  asset's digest in `gh api repos/astral-sh/uv/releases/tags/<version>`).
 
 ### PyPI trusted publishing
 
