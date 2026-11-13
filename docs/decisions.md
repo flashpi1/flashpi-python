@@ -45,39 +45,74 @@ decided, and are listed so they can be confirmed or changed before 1.0.
 - **Tooling.** uv with the hatchling build backend, Ruff (lint and format), pyright strict and
   pytest; async tests with anyio's pytest plugin on asyncio, and HTTP mocked with
   `httpx.MockTransport`.
+- **Same retries and timeouts as Node.** The retry rules above and the timeout of an attempt
+  behave as in the Node SDK, with seconds instead of milliseconds. The timeout is one deadline
+  for the whole attempt, from sending it to reading the whole answer, as Node's
+  AbortController: `AsyncFlashpi` wraps the attempt in `asyncio.timeout()` (cancelling the task
+  still cancels the call), and `Flashpi` checks the deadline as each chunk of the answer arrives,
+  so an answer that trickles in times out too.
+- **Porting choices the owner confirmed on 2026-11-13.** Chosen while porting, then confirmed
+  as proposed:
+  - `list()` takes its filters as a dict with the API's camelCase keys,
+    `documents.list({"status": "authorized", "issueDateFrom": "2026-11-01"}, timeout=30)`, as
+    Node's `list(params, options)` and the create bodies.
+  - Node's per-call `.withResponse()` is a view on each resource,
+    `client.documents.with_response.get(id)`, returning `APIResponse(data, response,
+    request_id)`.
+  - Models are imported from `flashpi.types` (`from flashpi.types import Document`); the package
+    root exports only the clients, errors, pages, options and webhook helpers.
+  - `unwrap_webhook` and `verify_webhook_signature` are synchronous on both clients (Node's are
+    async only because of Web Crypto); the webhook `now` is a `datetime` or Unix seconds.
+  - Redirects are never followed. `AsyncFlashpi` runs on asyncio only, not trio. The User-Agent
+    is `flashpi-python/<version>`.
+  - Misusing an argument in a way a type checker would refuse raises `TypeError` or
+    `ValueError` (unknown option names, a body that is not JSON, bad webhook `tolerance` or
+    `now`, header names or values that are not text, a .p12 that is not bytes or a binary file);
+    bad timeouts, `max_retries`, ids, `base_url` and API key stay `FlashpiError`, as in Node.
 
 ### Chosen while porting (to confirm)
 
-- **Shape of the API.** Models live in `flashpi.types` (`from flashpi.types import Document`);
-  the package root exports the clients, errors, pages, options and webhook helpers. Resource
-  classes are in `flashpi.resources` (`Async` prefix for the async ones; `StatusResource` so it
-  does not clash with the `Status` model). `list()` takes its filters as a dict with the API's
-  camelCase keys, `documents.list({"status": "authorized"}, timeout=30)`, as Node's
-  `list(params, options)`. On `AsyncFlashpi`, `list()` returns an `AsyncPaginator` without an
-  `await`: `async for` walks every item, `await` gives the first page. Node's per-call
-  `.withResponse()` is a view on each resource, `client.documents.with_response.get(id)`,
-  returning `APIResponse(data, response, request_id)`. `issuer_onboardings.complete(id)` sends
-  `{}` and `webhook_endpoints.rotate_secret(id)` no body when no body is given;
+- **Shape of the API.** Resource classes are in `flashpi.resources` (`Async` prefix for the
+  async ones; `StatusResource` so it does not clash with the `Status` model). On `AsyncFlashpi`,
+  `list()` returns an `AsyncPaginator` without an `await`: `async for` walks every item, `await`
+  gives the first page. `issuer_onboardings.complete(id)` sends `{}` and
+  `webhook_endpoints.rotate_secret(id)` no body when no body is given;
   `documents.send_email(id)` always sends `{}`.
-- **Errors.** Values a type checker would refuse (unknown option names, a body that is not
-  JSON, bad webhook `tolerance` or `now`, header values that are not text, a .p12 that is not
-  bytes or a binary file) raise `TypeError` or `ValueError`; bad timeouts, retries, ids, base URL,
-  API key and .p12 contents (empty, over 1 MiB, password not text) raise `FlashpiError`, as in
-  Node. Header values are checked by the SDK itself, because httpx 0.27 and 0.28 fail on them
-  differently.
-- **Requests.** User-Agent `flashpi-python/<version>`. The timeout of an attempt is httpx's
-  (connect, each read, write and pool separately), not one deadline per attempt as Node's
-  AbortController; the in-progress wait still counts wall time. Timeouts are capped at
-  2147483.647 s, Node's `setTimeout` limit, only so both SDKs accept the same values. A 3xx
-  answer raises `APIError`, `base_url` must be an http(s) URL with a host, and the client closes
-  only an httpx client it created. In a sync-mode issue, a `waitTimeoutSeconds` that is not a
-  number counts as the default 15. A .p12 upload sends the password field before the file, whose
-  content type is always `application/x-pkcs12`; a file object is read once and not closed.
-- **Runtimes.** `AsyncFlashpi` sleeps with `asyncio.sleep`, so it runs on asyncio, not trio.
-  There is no counterpart of Node's browser guard (Pyodide is not refused).
-- **Webhooks.** `unwrap_webhook` and `verify_webhook_signature` are synchronous on both clients
-  (Node's are async only because of Web Crypto); `now` is a `datetime` or Unix seconds. A signed
-  body that is not a JSON object is refused. Thin endpoints use
+- **Errors.** .p12 contents (empty, over 1 MiB, password not text) raise `FlashpiError`, as in
+  Node. A request httpx refuses to write (h11's `LocalProtocolError`) raises a `FlashpiError`
+  at once, not a retried `APIConnectionError`, and without httpx's reason, which quotes the
+  refused header (possibly the Authorization one).
+- **Headers.** Every value that becomes a header (`idempotency_key`, `correlation_id`,
+  `language`, `extra_headers`, and the client's `default_headers` and `language`) is checked by
+  the SDK before anything is sent, so a bad one is never retried as a network failure. As Node's
+  `Headers`, the spaces, tabs and line breaks around a value are trimmed, and the trimmed
+  Idempotency-Key is the one on errors. A line break, NUL or another control character left
+  inside a value, or a name that is not an RFC 9110 token, raises `ValueError` (Node: a
+  `TypeError` from `Headers`; for control characters other than CR, LF and NUL, Node fails only
+  when sending, as a retried network error); a value that is not text raises `TypeError` (Node
+  turns it into text). The messages never show the value. Text outside ASCII is sent as UTF-8,
+  as httpx does.
+- **API key.** Besides the prefix, the key must be visible ASCII without spaces: a key with a
+  space, a line break, a control character or a character outside ASCII raises `FlashpiError`
+  when the client is created, without showing the key (Node sends inner spaces and leaks a key
+  with a line break in its `TypeError`).
+- **Requests.** On `Flashpi`, the deadline of an attempt is checked as each chunk of the answer
+  arrives: until the answer starts, httpx limits connecting, sending, waiting for a pooled
+  connection and waiting for the answer to the timeout each, and one stalled read can add up to
+  one more timeout. The in-progress wait counts wall time. Timeouts are capped at 2147483.647 s,
+  Node's `setTimeout` limit, only so both SDKs accept the same values. A 3xx answer raises
+  `APIError`, `base_url` must be an http(s) URL with a host, and the client closes only an httpx
+  client it created. In an issue with `options.waitForAuthorization`, a `waitTimeoutSeconds`
+  that is not a number counts as the default 15. A .p12 upload sends the password field before
+  the file, whose content type is always `application/x-pkcs12`. A file object is read once, in
+  pieces, up to one byte past 1 MiB (a bigger file is refused without being read whole, as
+  "more than 1048576 bytes"), and not closed; an async reader (`async def read`) is refused with
+  `TypeError`. The repr of a multipart body lists only its part names, never the .p12 or its
+  password.
+- **Runtimes.** There is no counterpart of Node's browser guard (Pyodide is not refused).
+- **Webhooks.** A signed body that is not a JSON object is refused. A `webhook-id` that cannot
+  be encoded as UTF-8 (a framework's surrogate escape of other bytes) ends at
+  `no_matching_signature`, as in Node. Thin endpoints use
   `cast(ThinWebhookEvent, unwrap_webhook(...))`. Headers are any `Mapping`: Flask's
   `request.headers` (Werkzeug's `Headers`) is not one, although it works at run time, so the
   README passes `dict(request.headers)`.
@@ -85,12 +120,16 @@ decided, and are listed so they can be confirmed or changed before 1.0.
   datamodel-code-generator: no large dev dependency, a deterministic output that already passes
   Ruff and pyright, and a failure on any construct it does not know. Inline enums are named after
   their schema and property (`DocumentStatus`, `CreateWebhookEndpointEnabledEventsItem`).
-  `CertificateUpload.file` also takes a binary file object.
+  `CertificateUpload.file` also takes a binary file object. The daily sync downloads the
+  contract over HTTPS only and refuses a redirect to any other scheme (Node's script has no such
+  check).
 - **README examples.** Every python block of both READMEs becomes a module in
   `tests/examples/readme/` (`scripts/readme.py`) that pyright and Ruff check and the tests keep in
   step with the READMEs, the counterpart of Node's type-checked `test/examples/readme.ts`. The
   Django, Flask and FastAPI examples are checked against small stubs with those frameworks' real
-  signatures, so none of them becomes a dependency.
+  signatures, so none of them becomes a dependency. The READMEs link to each other and to the
+  license with absolute URLs, since PyPI shows `README.md` and cannot follow relative links; the
+  package check fails on one.
 - **Live suite.** Run with `uv run pytest -m live --no-cov`. Besides Node's steps it reads the
   status and walks the events with `AsyncFlashpi`; it still issues exactly one invoice.
 - **CI.** Lint, format, pyright and tests with a 95 % coverage gate on the Python of
@@ -98,12 +137,15 @@ decided, and are listed so they can be confirmed or changed before 1.0.
   dependencies (httpx 0.27); and a build whose wheel and sdist are checked file by file
   (`scripts/package_check.py`) and whose wheel is installed alone and used on 3.11 and 3.15. The
   sdist carries the tests and what they need, so they run from it. setup-uv installs the latest
-  uv; the lockfile is checked with `--locked`.
+  uv (in the release's build job too, which holds no secret); the lockfile is checked with
+  `--locked`.
 - **Releases.** release-please's `python` type updates `pyproject.toml`; `_version.py` and the
   package's entry in `uv.lock` are extra files, since `uv sync --locked` fails when the lockfile
-  and `pyproject.toml` disagree. The publish job builds the tag with `uv build --no-sources` and
-  no cache, checks the files, and uploads them with trusted publishing and PEP 740 attestations.
-  It runs no tests (CI ran them on the release PR), to keep dependency code away from its
-  `id-token` permission. PyPI accepts a pending publisher before the project exists, so unlike
-  npm, 0.1.0 is published by the workflow too. PyPI shows `README.md`, the Spanish one, as npm
-  does.
+  and `pyproject.toml` disagree. A build job, with a read-only token and no secret, builds the
+  tag with `uv build --no-sources` and no cache and checks the files. The publish job, the only
+  one with the `id-token` permission, checks out nothing and runs no code of the repository or
+  of its dependencies (not even the build backend): it downloads those files and uploads them
+  with trusted publishing and PEP 740 attestations. Neither runs the tests (CI ran them on the
+  release PR). The build backend is not pinned beyond `hatchling>=1.33`. PyPI accepts a pending
+  publisher before the project exists, so unlike npm, 0.1.0 is published by the workflow too.
+  PyPI shows `README.md`, the Spanish one, as npm does.
