@@ -77,6 +77,9 @@ class TestTheClient:
             ({"max_retries": True}, "max_retries"),
             ({"base_url": "ftp://api.flashpi.com.ec"}, "base_url"),
             ({"base_url": "api.flashpi.com.ec"}, "base_url"),
+            ({"base_url": "https://"}, "base_url"),
+            ({"base_url": "http://[::1"}, "base_url"),
+            ({"base_url": 42}, "base_url"),
             ({"default_headers": {"IDEMPOTENCY-KEY": "always-the-same"}}, "Idempotency-Key"),
         ],
     )
@@ -88,6 +91,12 @@ class TestTheClient:
     ) -> None:
         with pytest.raises(FlashpiError, match=re.escape(message)):
             client_class(TEST_KEY, **options)  # pyright: ignore[reportArgumentType]
+
+    def test_refuses_header_values_that_are_not_text_when_created(
+        self, client_class: type[Flashpi | AsyncFlashpi]
+    ) -> None:
+        with pytest.raises(TypeError, match="Header value"):
+            client_class(TEST_KEY, default_headers={"x-number": 1})  # pyright: ignore[reportArgumentType]
 
     def test_accepts_the_longest_timeout_and_explicit_none_as_the_defaults(
         self, client_class: type[Flashpi | AsyncFlashpi]

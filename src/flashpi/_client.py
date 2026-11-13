@@ -36,8 +36,7 @@ def _configure(
             "Pass idempotency_key= to each create() instead"
         )
     url = DEFAULT_BASE_URL if base_url is None else base_url
-    parsed = httpx.URL(url)
-    if parsed.scheme not in ("http", "https") or not parsed.host:
+    if not _is_http_url(url):
         raise FlashpiError(f"base_url must be an http:// or https:// URL, got {url!r}")
     config = ClientConfig(
         api_key=key,
@@ -50,6 +49,16 @@ def _configure(
         default_headers=headers,
     )
     return config, environment
+
+
+def _is_http_url(url: object) -> bool:
+    if not isinstance(url, str):
+        return False
+    try:
+        parsed = httpx.URL(url)
+    except httpx.InvalidURL:
+        return False
+    return parsed.scheme in ("http", "https") and bool(parsed.host)
 
 
 def _api_key(api_key: str | None) -> tuple[str, Environment]:
