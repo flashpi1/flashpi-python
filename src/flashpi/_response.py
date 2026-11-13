@@ -6,7 +6,7 @@ successful response in a context variable, so the methods themselves stay unchan
 """
 
 import functools
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Generic, ParamSpec, TypeVar
@@ -76,8 +76,9 @@ def response_wrapper(method: Callable[P, T]) -> Callable[P, APIResponse[T]]:
 
 def async_response_wrapper(
     method: Callable[P, Awaitable[T]],
-) -> Callable[P, Awaitable[APIResponse[T]]]:
-    """The async `method` returning an `APIResponse` around its data."""
+) -> Callable[P, Coroutine[Any, Any, APIResponse[T]]]:
+    """The async `method` returning an `APIResponse` around its data: a coroutine, so it can run
+    as a task (`asyncio.create_task`, `TaskGroup.create_task`)."""
 
     @functools.wraps(method)
     async def wrapped(*args: P.args, **kwargs: P.kwargs) -> APIResponse[T]:

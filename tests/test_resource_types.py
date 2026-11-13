@@ -5,6 +5,7 @@ Pyright checks this module: `assert_type` lines must hold, and every `pyright: i
 a real error (a misuse the types refuse). The functions are only type-checked, never run.
 """
 
+import asyncio
 from typing import assert_type
 
 from flashpi import APIResponse, AsyncFlashpi, AsyncPage, AsyncPaginator, Flashpi, Page
@@ -70,3 +71,13 @@ async def uses_the_async_client(flashpi: AsyncFlashpi, invoice: CreateInvoice) -
         assert_type(document, Document)
 
     await flashpi.status.get(timeout="5")  # pyright: ignore[reportArgumentType]
+
+
+async def runs_with_response_calls_as_tasks(flashpi: AsyncFlashpi, invoice: CreateInvoice) -> None:
+    task = asyncio.create_task(flashpi.documents.with_response.get("id"))
+    assert_type(task, asyncio.Task[APIResponse[Document]])
+    pages = asyncio.create_task(flashpi.issuers.with_response.list())
+    assert_type(pages, asyncio.Task[APIResponse[AsyncPage[Issuer]]])
+    async with asyncio.TaskGroup() as group:
+        grouped = group.create_task(flashpi.invoices.with_response.create(invoice))
+        assert_type(grouped, asyncio.Task[APIResponse[Document]])
