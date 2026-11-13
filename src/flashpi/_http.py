@@ -19,7 +19,7 @@ import httpx
 
 from ._errors import APIConnectionError, APIError, APITimeoutError, FlashpiError, api_error
 from ._response import APIResponse
-from ._validate import MAX_TIMEOUT, check_header_values, valid_retries, valid_timeout
+from ._validate import MAX_TIMEOUT, checked_headers, header_value, valid_retries, valid_timeout
 from ._version import VERSION
 from .types import Language
 
@@ -188,7 +188,6 @@ class Call:
 def prepare(config: ClientConfig, spec: RequestSpec[Any]) -> Call:
     """Checks the options and builds what the attempts share. Raises before anything is sent."""
     options = check_options(spec.options)
-    check_header_values(options.get("extra_headers"))
     max_retries = config.max_retries
     if options.get("max_retries") is not None:
         max_retries = valid_retries("max_retries", options.get("max_retries"))
@@ -347,12 +346,27 @@ def deleted(method: Method, url: str, failure: APIError) -> APIResponse[Any]:
 
 
 def check_options(options: RequestOptions | None) -> RequestOptions:
+    """The caller's options with the values that become headers checked and trimmed
+    (`header_value`), so the attempts, the errors and a recovered read all use the same ones."""
     if not options:
         return {}
     unknown = sorted(set(options) - _OPTION_NAMES)
     if unknown:
         raise TypeError(f"Unknown request options: {', '.join(unknown)}")
-    return options
+    checked: RequestOptions = {**options}
+    extra_headers = options.get("extra_headers")
+    if extra_headers is not None:
+        checked["extra_headers"] = checked_headers("extra_headers", extra_headers)
+    idempotency_key = options.get("idempotency_key")
+    if idempotency_key is not None:
+        checked["idempotency_key"] = header_value("idempotency_key", idempotency_key)
+    correlation_id = options.get("correlation_id")
+    if correlation_id is not None:
+        checked["correlation_id"] = header_value("correlation_id", correlation_id)
+    language = options.get("language")
+    if language is not None:
+        checked["language"] = cast("Language", header_value("language", language))
+    return checked
 
 
 def without_idempotency_key(options: RequestOptions) -> RequestOptions:

@@ -95,7 +95,7 @@ class TestTheClient:
     def test_refuses_header_values_that_are_not_text_when_created(
         self, client_class: type[Flashpi | AsyncFlashpi]
     ) -> None:
-        with pytest.raises(TypeError, match="Header value"):
+        with pytest.raises(TypeError, match="The value of header 'x-number' must be str, not int"):
             client_class(TEST_KEY, default_headers={"x-number": 1})  # pyright: ignore[reportArgumentType]
 
     def test_accepts_the_longest_timeout_and_explicit_none_as_the_defaults(
@@ -236,9 +236,9 @@ class TestRequests:
         self, make: MakeApi
     ) -> None:
         api = make(json_response({}))
-        with pytest.raises(TypeError, match="Header value must be str, not int"):
+        with pytest.raises(TypeError, match="'x-number' must be str, not int"):
             await api.call("status", extra_headers={"x-number": 1})
-        with pytest.raises(TypeError, match="Header value must be str, not bytes"):
+        with pytest.raises(TypeError, match="'x-raw' must be str, not bytes"):
             await api.call("status", extra_headers={"x-raw": b"bytes"})
         assert api.sent == []
 

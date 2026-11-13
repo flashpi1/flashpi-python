@@ -9,7 +9,7 @@ import httpx
 
 from ._errors import FlashpiError
 from ._http import AsyncEngine, ClientConfig, SyncEngine
-from ._validate import check_header_values, valid_retries, valid_timeout
+from ._validate import checked_headers, header_value, valid_retries, valid_timeout
 from ._webhooks import Webhooks
 from .resources.documents import (
     AsyncCreditNotes,
@@ -51,8 +51,9 @@ def _configure(
     default_headers: Mapping[str, str] | None,
 ) -> tuple[ClientConfig, Environment]:
     key, environment = _api_key(api_key)
-    headers = dict(default_headers or {})
-    check_header_values(headers)
+    headers = checked_headers("default_headers", default_headers)
+    if language is not None:
+        language = cast("Language", header_value("language", language))
     if "idempotency-key" in httpx.Headers(headers):
         raise FlashpiError(
             "default_headers cannot carry an Idempotency-Key: it must be unique per operation. "
@@ -93,16 +94,14 @@ def _api_key(api_key: str | None) -> tuple[str, Environment]:
             "Missing API key: pass it to Flashpi(api_key=...) or set the FLASHPI_API_KEY "
             "environment variable"
         )
-    if key.startswith("fp_test_"):
-        return key, "test"
-    if key.startswith("fp_live_"):
-        return key, "live"
     if key.startswith("whsec_"):
         raise FlashpiError(
             "That is a webhook signing secret (whsec_...), not an API key: use it with "
             "flashpi.webhooks"
         )
-    raise FlashpiError("The API key must start with fp_test_ or fp_live_")
+    if not key.startswith(("fp_test_", "fp_live_")):
+        raise FlashpiError("The API key must start with fp_test_ or fp_live_")
+    return key, "test" if key.startswith("fp_test_") else "live"
 
 
 def _describe(client: object, environment: Environment, config: ClientConfig) -> str:
