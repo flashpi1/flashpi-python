@@ -10,7 +10,7 @@ import json
 import random
 import time
 import uuid
-from collections.abc import Generator, Mapping
+from collections.abc import Generator, Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Generic, Literal, TypeAlias, TypedDict, TypeVar, cast
 from urllib.parse import quote, urlencode
@@ -59,7 +59,8 @@ class RequestOptions(TypedDict, total=False):
     `Idempotency-Key` in `extra_headers` works too."""
 
     timeout: float | None
-    """Seconds to wait for each attempt, overriding the client's `timeout`."""
+    """Seconds each attempt may take, from sending it to reading the whole answer, overriding the
+    client's `timeout`."""
 
     max_retries: int | None
     """Retries after network errors, timeouts, 429 and 5xx, overriding the client's
@@ -118,7 +119,7 @@ class RequestSpec(Generic[T]):
 
     min_timeout: float = 0
     """A floor, in seconds, for the per-attempt timeout of requests the API holds open (issuing
-    in sync mode)."""
+    with `options.waitForAuthorization`)."""
 
     recover_document: bool = False
     """For document POSTs: when a retry of this call is answered 422 `idempotency_key_reused` with
@@ -535,14 +536,48 @@ class SyncEngine:
             steps.close()
 
     def _send(self, step: Attempt) -> APIResponse[Any] | APIError:
+        """One attempt within its deadline. httpx limits connecting, sending and each read to the
+        attempt's timeout; the deadline is checked as each chunk of the answer arrives, so an
+        answer that trickles in still times out (one stalled read can add up to one timeout)."""
         request = self.http_client.build_request(**request_arguments(step))
+        deadline = _monotonic() + step.timeout
         try:
-            response = self.http_client.send(request, follow_redirects=False)
+            response = self.http_client.send(request, follow_redirects=False, stream=True)
+            try:
+                stream = cast("httpx.SyncByteStream", response.stream)
+                response.stream = _DeadlineStream(stream, deadline, request)
+                response.read()
+            finally:
+                response.close()
         except httpx.TimeoutException as error:
             raise timeout_error(step) from error
         except httpx.RequestError as error:
             raise connection_error(step, error) from error
         return read_response(response, step.response_type)
+
+
+class _DeadlineStream(httpx.SyncByteStream):
+    """The body of a sync answer, refused once the attempt's deadline has passed."""
+
+    def __init__(
+        self, stream: httpx.SyncByteStream, deadline: float, request: httpx.Request
+    ) -> None:
+        self._stream = stream
+        self._deadline = deadline
+        self._request = request
+
+    def __iter__(self) -> Iterator[bytes]:
+        for chunk in self._stream:
+            self._check()
+            yield chunk
+        self._check()
+
+    def _check(self) -> None:
+        if _monotonic() > self._deadline:
+            raise httpx.ReadTimeout("The attempt's deadline passed", request=self._request)
+
+    def close(self) -> None:
+        self._stream.close()
 
 
 class AsyncEngine:
@@ -575,10 +610,13 @@ class AsyncEngine:
             steps.close()
 
     async def _send(self, step: Attempt) -> APIResponse[Any] | APIError:
+        """One attempt within its deadline, from sending it to reading the whole answer, as the
+        Node SDK's AbortController. Cancelling the task still cancels the attempt."""
         request = self.http_client.build_request(**request_arguments(step))
         try:
-            response = await self.http_client.send(request, follow_redirects=False)
-        except httpx.TimeoutException as error:
+            async with asyncio.timeout(step.timeout):
+                response = await self.http_client.send(request, follow_redirects=False)
+        except (TimeoutError, httpx.TimeoutException) as error:
             raise timeout_error(step) from error
         except httpx.RequestError as error:
             raise connection_error(step, error) from error

@@ -36,7 +36,8 @@ from .types import Environment, Language
 
 DEFAULT_BASE_URL = "https://api.flashpi.com.ec"
 DEFAULT_TIMEOUT = 60.0
-"""Seconds to wait for each attempt of a request (the Node SDK's 60 000 ms)."""
+"""Seconds each attempt of a request may take, from sending it to reading the whole answer (the
+Node SDK's 60 000 ms)."""
 DEFAULT_MAX_RETRIES = 2
 
 
@@ -182,8 +183,10 @@ class Flashpi:
             api_key: The API key (`fp_test_...` or `fp_live_...`). Defaults to the
                 FLASHPI_API_KEY environment variable.
             base_url: The API's address (default https://api.flashpi.com.ec).
-            timeout: Seconds to wait for each attempt of a request (default 60). Issuing in sync
-                mode raises it to the wait plus 15 seconds by itself.
+            timeout: Seconds each attempt of a request may take, from sending it to reading the
+                whole answer (default 60). Issuing with `options.waitForAuthorization` raises it,
+                on both clients, to the wait plus 15 seconds. On `Flashpi` the deadline is
+                checked as the answer arrives, so one stalled read can add up to one timeout.
             max_retries: Retries after network errors, timeouts, 429 and 5xx (default 2; 0 turns
                 them off).
             language: Language of the API's messages: `en` (default) or `es`. Error codes do not
