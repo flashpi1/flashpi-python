@@ -2,6 +2,7 @@
 
 import gc
 import io
+import os
 import warnings
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -614,6 +615,23 @@ class TestCertificateUploads:
         assert sent_form(api.sent[0])[1][3] == P12 * 100
         assert file.asked[0] == 1_048_577
         assert file.asked[1] == 1_048_577 - 7
+
+    @pytest.mark.parametrize("buffering", [0, -1], ids=["raw", "buffered"])
+    @pytest.mark.parametrize("ready", [b"", P12], ids=["empty", "partly read"])
+    async def test_refuses_a_non_blocking_stream_with_no_data_ready(
+        self, make: MakeApi, buffering: int, ready: bytes
+    ) -> None:
+        reading, writing = os.pipe()
+        os.set_blocking(reading, False)
+        os.write(writing, ready)
+        api = make()
+        refused = pytest.raises(FlashpiError, match="non-blocking stream with no data ready")
+        try:
+            with open(reading, "rb", buffering=buffering) as file, refused:
+                await api.op("issuers.certificates.upload", ISSUER, {"file": file, "password": "x"})
+        finally:
+            os.close(writing)
+        assert api.sent == []
 
     async def test_refuses_an_async_reader_without_calling_it(self, make: MakeApi) -> None:
         class AsyncReader:

@@ -77,7 +77,8 @@ def _read(file: object) -> bytes:
 
     A file is read in pieces until its end or one byte past the largest certificate, so a big or
     wrong file is refused without loading it whole (a raw stream may also return fewer bytes than
-    asked before its end). Async readers (`async def read`) are refused before being called.
+    asked before its end). Async readers (`async def read`) are refused before being called, and
+    a non-blocking stream that has no data ready (its read returns None) is refused too.
     """
     if isinstance(file, bytes | bytearray | memoryview):
         return bytes(cast("bytes | bytearray | memoryview[int]", file))
@@ -90,6 +91,11 @@ def _read(file: object) -> bytes:
         chunk: object = read(MAX_CERTIFICATE_BYTES + 1 - size)
         if inspect.iscoroutine(chunk):
             chunk.close()
+        if chunk is None:
+            raise FlashpiError(
+                "The certificate file is a non-blocking stream with no data ready: pass its bytes "
+                "or a blocking file"
+            )
         if not isinstance(chunk, bytes):
             raise _not_binary(file)
         if not chunk:

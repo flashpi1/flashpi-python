@@ -112,7 +112,8 @@ decided, and are listed so they can be confirmed or changed before 1.0.
   the file, whose content type is always `application/x-pkcs12`. A file object is read once, in
   pieces, up to one byte past 1 MiB (a bigger file is refused without being read whole, as
   "more than 1048576 bytes"), and not closed; an async reader (`async def read`) is refused with
-  `TypeError`. The repr of a multipart body lists only its part names, never the .p12 or its
+  `TypeError`, and a non-blocking stream with no data ready (its `read()` returns None) with
+  `FlashpiError`. The repr of a multipart body lists only its part names, never the .p12 or its
   password.
 - **Secrets in tracebacks.** Error trackers record the local variables of every frame an error
   passes through, and scrub them by name (`api_key`, `secret`, `password`) at best. So no frame
