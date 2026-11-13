@@ -68,6 +68,8 @@ known-first-party = ["flashpi", "scripts", "tests"]
 include = ["src", "tests", "scripts"]
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
+# The bits of Django, Flask and FastAPI the README examples use (tests/examples/readme).
+stubPath = "tests/examples/typings"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
