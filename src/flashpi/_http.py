@@ -222,13 +222,14 @@ def plan(config: ClientConfig, spec: RequestSpec[Any]) -> Plan:
     unanswered = False
 
     while True:
-        headers = build_headers(config, spec, call.options, call.idempotency_key)
         failure: APIError | APIConnectionError
         try:
             outcome = yield Attempt(
                 spec.method,
                 call.url,
-                headers,
+                # Not kept in a local: the headers carry the API key, httpx.Headers hides it only
+                # in its repr, and error trackers record every frame's local variables.
+                build_headers(config, spec, call.options, call.idempotency_key),
                 call.content,
                 spec.multipart,
                 call.timeout,

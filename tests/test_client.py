@@ -1,7 +1,9 @@
 """The clients and the requests they send (Node: test/client.test.ts)."""
 
 import re
+from collections.abc import Callable
 from traceback import format_exception
+from typing import Any
 
 import httpx
 import pytest
@@ -15,7 +17,7 @@ from flashpi import (
     FlashpiError,
 )
 from tests.conftest import MakeApi
-from tests.support import ID, LIVE_KEY, TEST_KEY, json_response
+from tests.support import ID, LIVE_KEY, TEST_KEY, json_response, problem, secret_in_frames
 
 pytestmark = pytest.mark.anyio
 
@@ -74,6 +76,50 @@ class TestTheClient:
             assert not any("SECRET" in text for text in shown)
             assert caught.value.__cause__ is None
             assert caught.value.__context__ is None
+
+    @pytest.mark.parametrize(
+        "options",
+        [
+            {"base_url": "api.flashpi.com.ec"},
+            {"timeout": -1},
+            {"max_retries": -1},
+            {"default_headers": {"X-Tenant": "a\nb"}},
+            {"default_headers": {"Idempotency-Key": "k"}},
+            {"language": 1},
+            {"http_client": object()},
+        ],
+        ids=["base_url", "timeout", "max_retries", "header", "idempotency", "language", "client"],
+    )
+    def test_keeps_the_key_out_of_the_frames_of_a_settings_error(
+        self,
+        client_class: type[Flashpi | AsyncFlashpi],
+        monkeypatch: pytest.MonkeyPatch,
+        options: dict[str, Any],
+    ) -> None:
+        monkeypatch.setenv("FLASHPI_API_KEY", LIVE_KEY)
+        for api_key in (None, TEST_KEY):
+            with pytest.raises((FlashpiError, TypeError, ValueError)) as caught:
+                client_class(api_key, **options)
+            # A caller's own `api_key` argument is theirs, and trackers scrub it by name.
+            assert secret_in_frames(caught.value, LIVE_KEY, allowed={"api_key"}) == []
+            assert secret_in_frames(caught.value, TEST_KEY, allowed={"api_key"}) == []
+
+    @pytest.mark.parametrize(
+        "key", ["fp_live_SECRETPART\nSECRETTAIL", "whsec_SECRETPART", "sk_live_SECRETPART"]
+    )
+    def test_keeps_a_refused_key_out_of_the_frames_of_its_error(
+        self,
+        client_class: type[Flashpi | AsyncFlashpi],
+        monkeypatch: pytest.MonkeyPatch,
+        key: str,
+    ) -> None:
+        with pytest.raises(FlashpiError) as caught:
+            client_class(key)
+        assert secret_in_frames(caught.value, "SECRETPART", allowed={"api_key"}) == []
+        monkeypatch.setenv("FLASHPI_API_KEY", key)
+        with pytest.raises(FlashpiError) as caught:
+            client_class()
+        assert secret_in_frames(caught.value, "SECRETPART") == []
 
     def test_refuses_such_a_key_from_the_environment_variable(
         self, client_class: type[Flashpi | AsyncFlashpi], monkeypatch: pytest.MonkeyPatch
@@ -187,6 +233,25 @@ class TestRequests:
         assert "idempotency-key" not in request.headers
         assert "content-type" not in request.headers
         assert request.content == b""
+
+    @pytest.mark.parametrize(
+        "replies",
+        [
+            lambda: [problem(404, "not_found")],
+            lambda: [httpx.ConnectError("refused") for _ in range(3)],
+            lambda: [problem(503, "unavailable") for _ in range(3)],
+        ],
+        ids=["answer", "connection", "retried 5xx"],
+    )
+    async def test_keeps_the_key_out_of_the_frames_of_a_request_error(
+        self, make: MakeApi, replies: Callable[[], list[Any]]
+    ) -> None:
+        for call in ("call", "call_with_response"):
+            api = make(*replies())
+            with pytest.raises(FlashpiError) as caught:
+                await getattr(api, call)("issue", {"a": 1})
+            assert len(api.sent) == len(replies())
+            assert secret_in_frames(caught.value, TEST_KEY) == []
 
     async def test_trims_spaces_around_a_pasted_key(self, make: MakeApi) -> None:
         api = make(json_response({}), api_key=f"  {TEST_KEY}\n")

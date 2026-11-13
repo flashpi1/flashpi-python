@@ -58,7 +58,11 @@ def _configure(
     language: Language | None,
     default_headers: Mapping[str, str] | None,
 ) -> tuple[ClientConfig, Environment]:
-    key, environment = _api_key(api_key)
+    # The key is checked first, so a missing or bad key is the error reported, then read again
+    # once every other setting is checked: no local of this frame keeps it, since error trackers
+    # record the local variables of the frames an error passes through (and scrub `api_key` by
+    # name at best).
+    _api_key(api_key)
     headers = checked_headers("default_headers", default_headers)
     if language is not None:
         language = cast("Language", header_value("language", language))
@@ -70,17 +74,19 @@ def _configure(
     url = DEFAULT_BASE_URL if base_url is None else base_url
     if not _is_http_url(url):
         raise FlashpiError(f"base_url must be an http:// or https:// URL, got {url!r}")
+    seconds = valid_timeout("timeout", DEFAULT_TIMEOUT if timeout is None else timeout)
+    retries = valid_retries(
+        "max_retries", DEFAULT_MAX_RETRIES if max_retries is None else max_retries
+    )
     config = ClientConfig(
-        api_key=key,
+        api_key=_api_key(api_key),
         base_url=url,
-        timeout=valid_timeout("timeout", DEFAULT_TIMEOUT if timeout is None else timeout),
-        max_retries=valid_retries(
-            "max_retries", DEFAULT_MAX_RETRIES if max_retries is None else max_retries
-        ),
+        timeout=seconds,
+        max_retries=retries,
         language=language,
         default_headers=headers,
     )
-    return config, environment
+    return config, "test" if config.api_key.startswith("fp_test_") else "live"
 
 
 def _is_http_url(url: object) -> bool:
@@ -93,30 +99,40 @@ def _is_http_url(url: object) -> bool:
     return parsed.scheme in ("http", "https") and bool(parsed.host)
 
 
-def _api_key(api_key: str | None) -> tuple[str, Environment]:
-    """The key (the argument or FLASHPI_API_KEY, trimmed as JavaScript's `trim()`, the byte order
-    mark included) and the environment its prefix sets."""
+def _api_key(api_key: str | None) -> str:
+    """The key: the argument or FLASHPI_API_KEY, trimmed as JavaScript's `trim()`, the byte order
+    mark included. A key that cannot be used raises FlashpiError, with no local keeping it."""
     value: object = os.environ.get("FLASHPI_API_KEY") if api_key is None else api_key
     key = _AROUND.sub("", value) if isinstance(value, str) else ""
+    problem = _key_problem(key)
+    if problem is None:
+        return key
+    del value, key
+    raise FlashpiError(problem)
+
+
+def _key_problem(key: str) -> str | None:
+    """Why a trimmed key cannot be used, or None. It returns instead of raising, so its frame is
+    never part of an error."""
     if not key:
-        raise FlashpiError(
+        return (
             "Missing API key: pass it to Flashpi(api_key=...) or set the FLASHPI_API_KEY "
             "environment variable"
         )
     if key.startswith("whsec_"):
-        raise FlashpiError(
+        return (
             "That is a webhook signing secret (whsec_...), not an API key: use it with "
             "flashpi.webhooks"
         )
     if not key.startswith(("fp_test_", "fp_live_")):
-        raise FlashpiError("The API key must start with fp_test_ or fp_live_")
+        return "The API key must start with fp_test_ or fp_live_"
     if not _API_KEY_CHARACTERS.fullmatch(key):
         # Never the key: httpx would refuse it in the Authorization header and quote it.
-        raise FlashpiError(
+        return (
             "The API key has spaces, line breaks or other characters an API key cannot have: "
             "copy it again from the Flashpi console"
         )
-    return key, "test" if key.startswith("fp_test_") else "live"
+    return None
 
 
 def _describe(client: object, environment: Environment, config: ClientConfig) -> str:

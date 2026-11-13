@@ -203,7 +203,11 @@ def _shows(value: object, secret: str | bytes, depth: int = 0) -> bool:
     if depth < 8 and isinstance(value, Sequence | Set):
         members = list(cast("Iterable[object]", value))
         return any(_shows(member, secret, depth + 1) for member in members)
-    return (secret if isinstance(secret, str) else repr(secret)[2:-1]) in repr(value)
+    try:
+        shown = repr(value)
+    except Exception:  # trackers skip what they cannot show, such as a half-built client
+        return False
+    return (secret if isinstance(secret, str) else repr(secret)[2:-1]) in shown
 
 
 # Test resources, declared as the real resources declare their operations.
