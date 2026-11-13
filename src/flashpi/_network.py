@@ -10,10 +10,10 @@ own limits, and so does a caller's `http_client`.
 """
 
 import ssl
-from collections.abc import Callable, Generator, Iterable
+from collections.abc import Callable, Generator, Iterable, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Any
+from typing import Any, cast
 
 import httpcore
 import httpx
@@ -37,11 +37,19 @@ def attempt_deadline(time_left: Callable[[], float]) -> Generator[None, None, No
 
 def limit_to_attempt_deadlines(client: httpx.Client) -> None:
     """Gives every connection pool of a client the SDK created, its own and those of the proxies
-    from the environment, the backend that keeps the attempts' deadlines."""
-    transports = [client._transport, *client._mounts.values()]  # pyright: ignore[reportPrivateUsage]
+    from the environment, the backend that keeps the attempts' deadlines.
+
+    Fail-safe: a version of httpx or httpcore without these private attributes leaves the client
+    as httpx built it, with httpx's own limits (the deadline is then checked only while the body
+    arrives and once it is read), and nothing breaks. tests/test_network.py fails in CI when that
+    happens, so the change is seen before a release."""
+    transports: list[object] = [getattr(client, "_transport", None)]
+    mounts: object = getattr(client, "_mounts", None)
+    if isinstance(mounts, Mapping):
+        transports.extend(cast("Mapping[object, object]", mounts).values())
     for transport in transports:
-        pool = getattr(transport, "_pool", None)
-        if isinstance(pool, httpcore.ConnectionPool):
+        pool: object = getattr(transport, "_pool", None)
+        if isinstance(pool, httpcore.ConnectionPool) and hasattr(pool, "_network_backend"):
             pool._network_backend = DeadlineBackend()  # pyright: ignore[reportPrivateUsage]
 
 

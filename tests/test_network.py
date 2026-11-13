@@ -9,18 +9,20 @@ import threading
 import time
 from collections.abc import Callable, Iterator
 from types import TracebackType
-from typing import Any
+from typing import Any, cast
 
 import httpcore
 import httpx
 import pytest
 
+import flashpi._client
 from flashpi import APITimeoutError, AsyncFlashpi, Flashpi
 from flashpi._network import (
     WRITE_PIECE,
     DeadlineBackend,
     DeadlineNetworkStream,
     attempt_deadline,
+    limit_to_attempt_deadlines,
 )
 from tests.support import TEST_KEY
 
@@ -190,6 +192,44 @@ class TestTheSDKsOwnClient:
             for pool in pools:
                 backend = pool._network_backend  # pyright: ignore[reportPrivateUsage]
                 assert isinstance(backend, DeadlineBackend)
+
+    def test_leaves_a_client_without_those_attributes_as_it_is(self) -> None:
+        # A future httpx without them: nothing breaks, httpx's own limits stay.
+        class Bare:
+            pass
+
+        bare = Bare()
+        limit_to_attempt_deadlines(cast("httpx.Client", bare))
+        assert vars(bare) == {}
+
+        transport = Bare()
+        mounted = Bare()
+        vars(mounted).update(_transport=transport, _mounts=["not a mapping"])
+        limit_to_attempt_deadlines(cast("httpx.Client", mounted))
+        assert vars(transport) == {}
+
+    def test_leaves_a_pool_without_a_network_backend_as_it_is(self) -> None:
+        # A future httpcore that renamed the attribute: no stray attribute is added.
+        with httpx.Client() as http_client:
+            transport = http_client._transport  # pyright: ignore[reportPrivateUsage]
+            assert isinstance(transport, httpx.HTTPTransport)
+            pool = transport._pool  # pyright: ignore[reportPrivateUsage]
+            del pool._network_backend  # pyright: ignore[reportPrivateUsage]
+            limit_to_attempt_deadlines(http_client)
+            assert not hasattr(pool, "_network_backend")
+
+    def test_answers_when_the_backend_could_not_be_given(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def keep_httpx_limits(_client: httpx.Client) -> None:
+            return None
+
+        monkeypatch.setattr(flashpi._client, "limit_to_attempt_deadlines", keep_httpx_limits)
+        with (
+            LocalServer(answer_at_once) as server,
+            Flashpi(TEST_KEY, base_url=server.url, timeout=5) as client,
+        ):
+            assert client.status.get() == {"status": "operational"}
 
     def test_leaves_your_http_client_as_it_is(self) -> None:
         with httpx.Client() as yours:
