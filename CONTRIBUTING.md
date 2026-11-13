@@ -33,8 +33,9 @@ uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run 
   anything missing or extra in them. CI then installs the wheel alone in a clean environment and
   runs `scripts/installed_check.py` with it.
 - `uv run pytest -m live --no-cov` calls the real API in test mode. It needs
-  `FLASHPI_TEST_API_KEY` (an `fp_test_` key, read_write) and `FLASHPI_DEMO_ISSUER_ID`, and issues
-  one test invoice on the demo issuer, which has a daily quota: run it only when needed.
+  `FLASHPI_TEST_API_KEY` (an `fp_test_` key, read_write) and `FLASHPI_DEMO_ISSUER_ID` (in CI,
+  an organization secret and variable shared with flashpi-node), and issues one test invoice on
+  the demo issuer, which has a daily quota: run it only when needed.
 
 ## Code conventions
 
@@ -91,10 +92,11 @@ checks.
 
 An app of the `flashpi1` organization, installed on `flashpi-python` (as on `flashpi-node`), with
 no webhook and these repository permissions: Contents, Pull requests and Issues, read and write.
-Its Client ID is the repository variable `FLASHPI_BOT_CLIENT_ID` and its private key the
-repository secret `FLASHPI_BOT_PRIVATE_KEY`. The workflows create a one-hour token per run with
-only the permissions each job needs. To rotate the key, generate a new one in the app's settings,
-update the secret, then delete the old key.
+Its Client ID is the organization variable `FLASHPI_BOT_CLIENT_ID` and its private key the
+organization secret `FLASHPI_BOT_PRIVATE_KEY`, shared with flashpi-node. The workflows create a
+one-hour token per run with only the permissions each job needs. To rotate the key, generate a
+new one in the app's settings, update the organization secret (not a repository one, which would
+shadow it here only), then delete the old key.
 
 The release builds in two jobs. The build job checks out the tag, builds the sdist and the wheel
 with no cache and checks them (`scripts/package_check.py`), with a read-only token and no secret.

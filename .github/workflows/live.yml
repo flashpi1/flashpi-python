@@ -4,8 +4,9 @@ name: Live API test
 # invoice on the shared demo issuer (daily quota of 50 per account). So it only runs when the
 # Release workflow dispatches it on release-please's pull request, or by hand.
 #
-# Needs the repository secret FLASHPI_TEST_API_KEY (an fp_test_ key with read_write access)
-# and the repository variable FLASHPI_DEMO_ISSUER_ID (the demo issuer id from the console).
+# Needs the organization secret FLASHPI_TEST_API_KEY (an fp_test_ key with read_write access)
+# and the organization variable FLASHPI_DEMO_ISSUER_ID (the demo issuer id from the console),
+# both shared with flashpi-node.
 on:
   workflow_dispatch:
 
