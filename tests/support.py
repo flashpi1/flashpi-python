@@ -15,6 +15,7 @@ from flashpi._http import Multipart, RequestSpec, path_of
 from flashpi._pagination import AsyncPage, AsyncPaginator, ListBody
 from flashpi._resource import AsyncAPIResource, SyncAPIResource
 from flashpi._response import APIResponse, async_response_wrapper, response_wrapper
+from flashpi.resources.documents import issue_spec as document_issue_spec
 
 TEST_KEY = f"fp_test_{'a' * 16}{'b' * 32}"
 LIVE_KEY = f"fp_live_{'a' * 16}{'b' * 32}"
@@ -154,18 +155,8 @@ def timeout_after(clock: Clock, seconds: float) -> Handler:
 
 
 def issue_spec(body: Thing, options: RequestOptions) -> RequestSpec[Thing]:
-    """A document POST, like the Node SDK's DocumentIssuer.create()."""
-    document_options: Thing = body.get("options") or {}
-    sync = document_options.get("waitForAuthorization") is True
-    wait_seconds: float = document_options.get("waitTimeoutSeconds", 15)
-    return RequestSpec[Thing](
-        method="POST",
-        path="/v1/invoices",
-        body=body,
-        options=options,
-        min_timeout=wait_seconds + 15 if sync else 0,
-        recover_document=True,
-    )
+    """A document POST: the one of `invoices.create()`, so the core tests run its real rules."""
+    return cast("RequestSpec[Thing]", document_issue_spec("/v1/invoices", body, options))
 
 
 def upload_spec(content: bytes, password: str, options: RequestOptions) -> RequestSpec[Thing]:
