@@ -96,6 +96,8 @@ decided, and are listed so they can be confirmed or changed before 1.0.
   are not UTF-8), which has no UTF-8, raises `ValueError`. `Content-Length` and
   `Transfer-Encoding` raise `ValueError` too, since httpx sets them from the body (Node's fetch
   refuses `Transfer-Encoding` before sending and fails a wrong `Content-Length` while sending).
+  An empty `language`, or one of spaces only, is not sent, as in Node: a call keeps the client's
+  language, and a client sends none.
   The messages never show the value.
 - **API key.** It is trimmed as Node's `trim()` does, a byte order mark (U+FEFF) included.
   Besides the prefix, the key must be visible ASCII without spaces: a key with a space, a line
