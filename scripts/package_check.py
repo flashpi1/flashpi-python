@@ -8,10 +8,13 @@ anything else.
 - The sdist holds the package sources plus what its tests need (tests, scripts, the OpenAPI
   document, the READMEs), so the tests can run from it.
 - Both carry the version of pyproject.toml, and the wheel depends on httpx only.
+- The description PyPI shows (README.md) has no relative link: pypi.org cannot follow one, and a
+  release's description cannot be changed after it is uploaded.
 """
 
 from __future__ import annotations
 
+import re
 import sys
 import tarfile
 import tomllib
@@ -29,6 +32,18 @@ SDIST_TREES = {
     "tests": (".py", ".pyi"),
 }
 """Directories the sdist carries for its tests, with the file types they may hold."""
+
+_FENCED_CODE = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)
+_INLINE_LINK = re.compile(r"\]\(\s*<?([^)\s>]+)")
+_LINK_DEFINITION = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)", re.MULTILINE)
+_ABSOLUTE = ("https://", "http://", "mailto:", "#")
+
+
+def relative_links(markdown: str) -> list[str]:
+    """The link and image targets of a Markdown text that are not absolute URLs or anchors."""
+    text = _FENCED_CODE.sub("", markdown)
+    targets = _INLINE_LINK.findall(text) + _LINK_DEFINITION.findall(text)
+    return [target for target in targets if not target.startswith(_ABSOLUTE)]
 
 
 def package_files(root: Path) -> list[str]:
@@ -68,6 +83,12 @@ def check_wheel(path: Path, root: Path, version: str) -> list[str]:
         "httpx<1,>=0.27"
     ]:
         problems.append(f"The wheel must depend on httpx>=0.27,<1 only, not {requires}")
+    description: object = metadata.get_payload()
+    for link in relative_links(description if isinstance(description, str) else ""):
+        problems.append(
+            f"The description PyPI shows links to {link}: use an absolute URL, since pypi.org "
+            "cannot follow a relative link"
+        )
     return problems
 
 

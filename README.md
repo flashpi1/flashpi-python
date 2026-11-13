@@ -7,7 +7,7 @@ Ecuador, para Python.
 > tanto puedes usar la API con HTTP simple: consulta la
 > [documentación](https://flashpi.com.ec/docs/).
 
-[English](README.en.md)
+[English](https://github.com/flashpi1/flashpi-python/blob/main/README.en.md)
 
 - Las 45 operaciones de la API: los seis comprobantes, documentos (XML, RIDE en PDF, correo),
   emisores con establecimientos, puntos de emisión y certificados .p12, webhooks y eventos.
@@ -442,4 +442,4 @@ dispositivos de tus usuarios. `repr(flashpi)` muestra el ambiente y la URL, nunc
 
 ## Licencia
 
-[MIT](LICENSE) © 2026 SIGNIADIGITAL S.A.
+[MIT](https://github.com/flashpi1/flashpi-python/blob/main/LICENSE) © 2026 SIGNIADIGITAL S.A.

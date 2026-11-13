@@ -6,7 +6,7 @@ Ecuador's SRI.
 > **Not published on PyPI yet.** The first version (0.1.0) is being prepared. Meanwhile, call the
 > API over plain HTTP: see the [documentation](https://flashpi.com.ec/docs/en/).
 
-[Español](README.md)
+[Español](https://github.com/flashpi1/flashpi-python/blob/main/README.md)
 
 - The 45 operations of the API: the six document types, documents (XML, RIDE PDF, email),
   issuers with establishments, emission points and .p12 certificates, webhooks and events.
@@ -436,4 +436,4 @@ devices. `repr(flashpi)` shows the environment and the URL, never the key.
 
 ## License
 
-[MIT](LICENSE) © 2026 SIGNIADIGITAL S.A.
+[MIT](https://github.com/flashpi1/flashpi-python/blob/main/LICENSE) © 2026 SIGNIADIGITAL S.A.

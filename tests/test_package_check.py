@@ -110,6 +110,29 @@ def test_the_wheel_metadata_has_the_version_and_httpx_only(
     assert message in capsys.readouterr().err
 
 
+def test_the_description_pypi_shows_has_no_relative_link(
+    root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    description = (
+        "# Flashpi\n\n[English](README.en.md) · [docs](https://flashpi.com.ec/docs) · "
+        "[top](#flashpi) · ![logo](docs/logo.png)\n\n```python\nprint(table['a'](1))\n```\n\n"
+        "[license]: LICENSE\n"
+    )
+    write_wheel(root, wheel_files(f"{METADATA}\n{description}"))
+    assert package_check.main(root) == 1
+    errors = capsys.readouterr().err
+    for link in ("README.en.md", "docs/logo.png", "LICENSE"):
+        assert f"links to {link}:" in errors
+    assert "flashpi.com.ec" not in errors
+    assert "table" not in errors
+
+
+@pytest.mark.parametrize("readme", ["README.md", "README.en.md"])
+def test_the_readmes_link_with_absolute_urls(readme: str) -> None:
+    text = (Path(__file__).resolve().parent.parent / readme).read_text(encoding="utf-8")
+    assert package_check.relative_links(text) == []
+
+
 def test_the_sdist_ships_what_the_tests_need(
     root: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
