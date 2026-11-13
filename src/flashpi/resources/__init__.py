@@ -23,6 +23,7 @@ from .documents import (
     Withholdings,
 )
 from .events import AsyncEvents, Events
+from .issuer_onboardings import AsyncIssuerOnboardings, IssuerOnboardings
 from .issuers import (
     AsyncCertificates,
     AsyncEmissionPoints,
@@ -45,6 +46,7 @@ __all__ = [
     "AsyncEstablishments",
     "AsyncEvents",
     "AsyncInvoices",
+    "AsyncIssuerOnboardings",
     "AsyncIssuers",
     "AsyncPurchaseSettlements",
     "AsyncStatusResource",
@@ -59,6 +61,7 @@ __all__ = [
     "Establishments",
     "Events",
     "Invoices",
+    "IssuerOnboardings",
     "Issuers",
     "PurchaseSettlements",
     "StatusResource",

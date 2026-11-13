@@ -177,6 +177,22 @@ CASES = [
         "GET",
         f"/v1/issuers/{ISSUER}/certificates/{CERTIFICATE}",
     ),
+    Case("issuer_onboardings.get", (ONBOARDING,), "GET", f"/v1/issuer-onboardings/{ONBOARDING}"),
+    Case(
+        "issuer_onboardings.complete",
+        (ONBOARDING,),
+        "POST",
+        f"/v1/issuer-onboardings/{ONBOARDING}/complete",
+        body={},
+        label="issuer_onboardings.complete (empty body by default)",
+    ),
+    Case(
+        "issuer_onboardings.complete",
+        (ONBOARDING, {"ruc": "1790012345001"}),
+        "POST",
+        f"/v1/issuer-onboardings/{ONBOARDING}/complete",
+        body={"ruc": "1790012345001"},
+    ),
 ]
 
 
@@ -566,3 +582,41 @@ class TestIssuers:
         result = await api.op_with_response(name, *args)
         assert isinstance(result, APIResponse)
         assert result.response.request.url.path == api.sent[0].url.path
+
+
+class TestIssuerOnboardings:
+    async def test_starts_an_onboarding_with_a_binary_file_and_a_file_name(
+        self, make: MakeApi
+    ) -> None:
+        api = make(json_response({"id": ONBOARDING}, 202), json_response({"id": ONBOARDING}, 202))
+        upload = {"file": io.BytesIO(P12), "password": "x", "filename": "firma.p12"}
+        assert (await api.op("issuer_onboardings.create", upload))["id"] == ONBOARDING
+        await api.op("issuer_onboardings.create", {"file": P12, "password": "x"})
+        assert [request.url.path for request in api.sent] == ["/v1/issuer-onboardings"] * 2
+        assert all("idempotency-key" in request.headers for request in api.sent)
+        assert sent_form(api.sent[0]) == [
+            ("password", None, None, b"x"),
+            ("file", "firma.p12", "application/x-pkcs12", P12),
+        ]
+        assert sent_form(api.sent[1])[1][1:] == ("certificate.p12", "application/x-pkcs12", P12)
+
+    async def test_refuses_a_missing_password_before_sending(self, make: MakeApi) -> None:
+        api = make()
+        with pytest.raises(FlashpiError, match="password"):
+            await api.op("issuer_onboardings.create", {"file": P12})
+        assert api.sent == []
+
+    @pytest.mark.parametrize(
+        ("name", "args"),
+        [
+            ("create", ({"file": P12, "password": "x"},)),
+            ("get", (ONBOARDING,)),
+            ("complete", (ONBOARDING,)),
+        ],
+    )
+    async def test_returns_the_response_with_with_response(
+        self, make: MakeApi, name: str, args: tuple[Any, ...]
+    ) -> None:
+        api = make(json_response({"id": ONBOARDING}, 201))
+        result = await api.op_with_response(f"issuer_onboardings.{name}", *args)
+        assert (result.data, result.response.status_code) == ({"id": ONBOARDING}, 201)
