@@ -7,10 +7,10 @@ from pathlib import Path
 from typing import Any, Literal, NotRequired, TypedDict, Union, cast, get_args, get_origin
 
 import pytest
-from scripts import openapi
-from scripts.openapi import GenerationError, generate
 
 from flashpi.types import _generated
+from scripts import openapi
+from scripts.openapi import GenerationError, generate
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACT = json.loads((ROOT / "openapi" / "openapi.json").read_text(encoding="utf-8"))

@@ -55,6 +55,9 @@ src = ["src", "tests", "scripts"]
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "C4", "PT", "RUF", "S", "N", "ANN", "TID", "PL"]
 ignore = ["PLR0913", "PLR2004"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["flashpi", "scripts", "tests"]
+
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "ANN", "PLR"]
 "scripts/**" = ["S", "T20"]
