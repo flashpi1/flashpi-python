@@ -8,7 +8,7 @@ from typing import Any, Literal, NotRequired, TypedDict, Union, cast, get_args, 
 
 import pytest
 
-from flashpi.types import _generated
+import flashpi.types._generated as _generated
 from scripts import openapi
 from scripts.openapi import GenerationError, generate
 
