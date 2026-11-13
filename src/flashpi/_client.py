@@ -11,6 +11,8 @@ from ._errors import FlashpiError
 from ._http import AsyncEngine, ClientConfig, SyncEngine
 from ._validate import valid_retries, valid_timeout
 from ._webhooks import Webhooks
+from .resources.events import AsyncEvents, Events
+from .resources.status import AsyncStatusResource, StatusResource
 from .types import Environment, Language
 
 DEFAULT_BASE_URL = "https://api.flashpi.com.ec"
@@ -104,6 +106,12 @@ class Flashpi:
     environment: Environment
     """`test` for fp_test_ keys (SRI pruebas), `live` for fp_live_ keys (SRI production)."""
 
+    events: Events
+    """Events of documents, certificates and email sending."""
+
+    status: StatusResource
+    """The API's status."""
+
     webhooks: Webhooks
     """Verify the signature of the webhooks you receive (no API key needed)."""
 
@@ -150,6 +158,8 @@ class Flashpi:
         self._owns_http_client = http_client is None
         self._http_client = http_client or httpx.Client(follow_redirects=False)
         self._engine = SyncEngine(config, self._http_client)
+        self.events = Events(self._engine)
+        self.status = StatusResource(self._engine)
         self.webhooks = Webhooks()
 
     def close(self) -> None:
@@ -189,6 +199,12 @@ class AsyncFlashpi:
     environment: Environment
     """`test` for fp_test_ keys (SRI pruebas), `live` for fp_live_ keys (SRI production)."""
 
+    events: AsyncEvents
+    """Events of documents, certificates and email sending."""
+
+    status: AsyncStatusResource
+    """The API's status."""
+
     webhooks: Webhooks
     """Verify the signature of the webhooks you receive (no API key needed)."""
 
@@ -222,6 +238,8 @@ class AsyncFlashpi:
         self._owns_http_client = http_client is None
         self._http_client = http_client or httpx.AsyncClient(follow_redirects=False)
         self._engine = AsyncEngine(config, self._http_client)
+        self.events = AsyncEvents(self._engine)
+        self.status = AsyncStatusResource(self._engine)
         self.webhooks = Webhooks()
 
     async def aclose(self) -> None:

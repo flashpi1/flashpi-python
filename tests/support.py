@@ -2,6 +2,7 @@
 operation on the sync or the async client, so every behavior test covers both."""
 
 import asyncio
+import inspect
 import json
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from functools import cached_property
@@ -370,6 +371,31 @@ class Api:
             return getattr(self.sync.things.with_response, name)(*args, **kwargs)
         assert self.async_ is not None
         return await getattr(self.async_.things.with_response, name)(*args, **kwargs)
+
+    @property
+    def client(self) -> SyncTestClient | AsyncTestClient:
+        client = self.sync or self.async_
+        assert client is not None
+        return client
+
+    def method(self, name: str) -> Any:
+        """A resource method of the client by its dotted name (`issuers.certificates.get`)."""
+        target: Any = self.client
+        for attribute in name.split("."):
+            target = getattr(target, attribute)
+        return target
+
+    async def op(self, name: str, *args: Any, **kwargs: Any) -> Any:
+        """Calls a resource method by its dotted name, awaiting it on the async client (a list
+        gives its first page)."""
+        result = self.method(name)(*args, **kwargs)
+        return await result if inspect.isawaitable(result) else result
+
+    async def op_with_response(self, name: str, *args: Any, **kwargs: Any) -> APIResponse[Any]:
+        """Calls the `with_response` view of a resource method: `op_with_response("documents.xml",
+        ...)` calls `client.documents.with_response.xml(...)`."""
+        resource, _, method = name.rpartition(".")
+        return await self.op(f"{resource}.with_response.{method}", *args, **kwargs)
 
     async def collect(self, query: Thing | None = None, **options: Any) -> list[Thing]:
         """Every item of a list, across pages."""
