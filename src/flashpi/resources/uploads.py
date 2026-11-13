@@ -1,6 +1,7 @@
 """The multipart body of a .p12 upload, for `issuers.certificates.upload()` and
 `issuer_onboardings.create()`."""
 
+import inspect
 from collections.abc import Mapping
 from typing import cast
 
@@ -48,14 +49,39 @@ def certificate_form(upload: CertificateUpload) -> Multipart:
 
 
 def _read(file: object) -> bytes:
-    """The bytes of the file: bytes-like values as they are, file objects read to the end."""
+    """The bytes of the file: bytes-like values as they are, file objects read to the end.
+
+    A file is read in pieces until its end or one byte past the largest certificate, so a big or
+    wrong file is refused without loading it whole (a raw stream may also return fewer bytes than
+    asked before its end). Async readers (`async def read`) are refused before being called.
+    """
     if isinstance(file, bytes | bytearray | memoryview):
         return bytes(cast("bytes | bytearray | memoryview[int]", file))
     read = getattr(file, "read", None)
-    content = read() if callable(read) else None
-    if not isinstance(content, bytes):
-        raise TypeError(
-            "The certificate file must be bytes or a file opened in binary mode ('rb'), "
-            f"got {type(file).__name__}"
+    if not callable(read) or inspect.iscoroutinefunction(read):
+        raise _not_binary(file)
+    chunks: list[bytes] = []
+    size = 0
+    while size <= MAX_CERTIFICATE_BYTES:
+        chunk: object = read(MAX_CERTIFICATE_BYTES + 1 - size)
+        if inspect.iscoroutine(chunk):
+            chunk.close()
+        if not isinstance(chunk, bytes):
+            raise _not_binary(file)
+        if not chunk:
+            break
+        chunks.append(chunk)
+        size += len(chunk)
+    if size > MAX_CERTIFICATE_BYTES:
+        raise FlashpiError(
+            f"The certificate file has more than {MAX_CERTIFICATE_BYTES} bytes, the most the API "
+            "accepts"
         )
-    return content
+    return b"".join(chunks)
+
+
+def _not_binary(file: object) -> TypeError:
+    return TypeError(
+        "The certificate file must be bytes or a file opened in binary mode ('rb'), "
+        f"got {type(file).__name__}"
+    )

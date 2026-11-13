@@ -1,6 +1,8 @@
 """Every resource method sends its operation (Node: test/resources.test.ts)."""
 
+import gc
 import io
+import warnings
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from email.parser import BytesParser
@@ -516,6 +518,26 @@ def sent_form(request: httpx.Request) -> list[Part]:
     return parts
 
 
+class CountingReader:
+    """A binary file that records the sizes asked for, and returns at most `piece` bytes per
+    read (a raw stream may return fewer bytes than asked before its end)."""
+
+    def __init__(self, content: bytes, piece: int | None = None) -> None:
+        self.content = content
+        self.piece = piece
+        self.asked: list[int] = []
+        self.given = 0
+
+    def read(self, size: int = -1) -> bytes:
+        self.asked.append(size)
+        end = len(self.content) if size < 0 else self.given + size
+        if self.piece is not None:
+            end = min(end, self.given + self.piece)
+        chunk = self.content[self.given : end]
+        self.given += len(chunk)
+        return chunk
+
+
 class TestCertificateUploads:
     async def test_uploads_a_certificate_as_multipart_with_the_file_and_the_password(
         self, make: MakeApi
@@ -570,6 +592,62 @@ class TestCertificateUploads:
         upload = {"file": bytes(1_048_576), "password": "x"}
         await api.op("issuers.certificates.upload", ISSUER, upload)
         assert len(sent_form(api.sent[0])[1][3]) == 1_048_576
+
+    async def test_reads_no_more_than_one_byte_past_the_limit_of_a_big_file(
+        self, make: MakeApi
+    ) -> None:
+        file = CountingReader(bytes(50 * 1_048_576))
+        api = make()
+        with pytest.raises(FlashpiError, match="more than 1048576 bytes"):
+            await api.op("issuers.certificates.upload", ISSUER, {"file": file, "password": "x"})
+        assert file.asked == [1_048_577]
+        assert file.given == 1_048_577
+        assert api.sent == []
+
+    async def test_reads_a_stream_that_returns_fewer_bytes_than_asked_to_its_end(
+        self, make: MakeApi
+    ) -> None:
+        file = CountingReader(P12 * 100, piece=7)
+        api = make(json_response({"id": CERTIFICATE}, 202))
+        await api.op("issuers.certificates.upload", ISSUER, {"file": file, "password": "x"})
+        assert sent_form(api.sent[0])[1][3] == P12 * 100
+        assert file.asked[0] == 1_048_577
+        assert file.asked[1] == 1_048_577 - 7
+
+    async def test_refuses_an_async_reader_without_calling_it(self, make: MakeApi) -> None:
+        class AsyncReader:
+            async def read(self, size: int = -1) -> bytes:  # pragma: no cover (never called)
+                return P12
+
+        api = make()
+        with warnings.catch_warnings(record=True) as seen:
+            warnings.simplefilter("always")
+            with pytest.raises(TypeError, match="binary mode"):
+                await api.op(
+                    "issuers.certificates.upload", ISSUER, {"file": AsyncReader(), "password": "x"}
+                )
+            gc.collect()
+        assert [str(warning.message) for warning in seen] == []
+        assert api.sent == []
+
+    async def test_closes_a_coroutine_returned_by_a_reader_and_refuses_it(
+        self, make: MakeApi
+    ) -> None:
+        async def content() -> bytes:  # pragma: no cover (closed, never run)
+            return P12
+
+        pending = content()
+
+        class LooksSync:
+            def read(self, size: int = -1) -> object:
+                return pending
+
+        api = make()
+        with pytest.raises(TypeError, match="got LooksSync"):
+            await api.op(
+                "issuers.certificates.upload", ISSUER, {"file": LooksSync(), "password": "x"}
+            )
+        assert pending.cr_frame is None
 
     @pytest.mark.parametrize(
         ("upload", "error", "message"),
