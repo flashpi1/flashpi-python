@@ -224,7 +224,9 @@ class Flashpi:
             default_headers: Headers sent with every request (not `Idempotency-Key`: that one is
                 per request).
             http_client: An `httpx.Client` to send the requests with (proxies, tests). The SDK
-                never follows redirects, and leaves closing this client to you.
+                never follows redirects, and leaves closing this client to you. A body that this
+                client's own response hooks read is checked against the deadline only once it
+                has been read.
         """
         config, self.environment = _configure(
             api_key,

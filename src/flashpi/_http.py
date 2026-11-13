@@ -578,6 +578,10 @@ class SyncEngine:
                 stream = cast("httpx.SyncByteStream", response.stream)
                 response.stream = _DeadlineStream(stream, deadline, request)
                 response.read()
+                # Also an answer whose end came late, and one the http_client's own response
+                # hooks read before the stream above could check it.
+                if _monotonic() > deadline:
+                    raise httpx.ReadTimeout("The attempt's deadline passed", request=request)
             finally:
                 response.close()
         except httpx.TimeoutException as error:
@@ -601,13 +605,9 @@ class _DeadlineStream(httpx.SyncByteStream):
 
     def __iter__(self) -> Iterator[bytes]:
         for chunk in self._stream:
-            self._check()
+            if _monotonic() > self._deadline:
+                raise httpx.ReadTimeout("The attempt's deadline passed", request=self._request)
             yield chunk
-        self._check()
-
-    def _check(self) -> None:
-        if _monotonic() > self._deadline:
-            raise httpx.ReadTimeout("The attempt's deadline passed", request=self._request)
 
     def close(self) -> None:
         self._stream.close()

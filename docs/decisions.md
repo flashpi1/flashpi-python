@@ -104,7 +104,8 @@ decided, and are listed so they can be confirmed or changed before 1.0.
 - **Requests.** On `Flashpi`, the deadline of an attempt is checked as each chunk of the answer
   arrives: until the answer starts, httpx limits connecting, sending, waiting for a pooled
   connection and waiting for the answer to the timeout each, and one stalled read can add up to
-  one more timeout. The in-progress wait counts wall time. Timeouts are capped at 2147483.647 s,
+  one more timeout. A body that the response hooks of a caller's `http_client` read is checked
+  only once it has been read. The in-progress wait counts wall time. Timeouts are capped at 2147483.647 s,
   Node's `setTimeout` limit, only so both SDKs accept the same values. A 3xx answer raises
   `APIError`, `base_url` must be an http(s) URL with a host, and the client closes only an httpx
   client it created. In an issue with `options.waitForAuthorization`, a `waitTimeoutSeconds`

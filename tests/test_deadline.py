@@ -115,6 +115,23 @@ class TestOnFlashpi:
         assert result.data == {"status": "operational"}
         assert result.response.content == b"".join(BODY)
 
+    def test_times_out_an_answer_that_a_response_hook_of_your_client_read(
+        self, clock: Clock
+    ) -> None:
+        body = Trickle(clock, BODY, 0.4)
+        mock = MockAPI([streamed(body)])
+        transport = httpx.MockTransport(mock.handler)  # pyright: ignore[reportArgumentType]
+
+        def read_the_body(response: httpx.Response) -> None:
+            response.read()
+
+        hooks = {"response": [read_the_body]}
+        http_client = httpx.Client(transport=transport, event_hooks=hooks)
+        client = SyncTestClient(http_client=http_client, timeout=1, max_retries=0)
+        with pytest.raises(APITimeoutError, match="timed out after 1 seconds"):
+            client.things.status()
+        assert len(mock.sent) == 1
+
     def test_times_out_an_empty_answer_whose_end_arrives_late(self, clock: Clock) -> None:
         late_end = Trickle(clock, [], 0)
 
