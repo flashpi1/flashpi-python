@@ -44,7 +44,17 @@ build-backend = "hatchling.build"
 packages = ["src/flashpi"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/flashpi", "tests", "README.md", "README.en.md", "CHANGELOG.md", "LICENSE"]
+# The sources and what their tests need, so the tests run from the sdist.
+include = [
+  "src/flashpi",
+  "tests",
+  "scripts",
+  "openapi/openapi.json",
+  "README.md",
+  "README.en.md",
+  "CHANGELOG.md",
+  "LICENSE",
+]
 
 [tool.ruff]
 line-length = 100
