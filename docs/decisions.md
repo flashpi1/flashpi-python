@@ -127,13 +127,14 @@ decided, and are listed so they can be confirmed or changed before 1.0.
   part names, never the .p12 or its password.
 - **Secrets in tracebacks.** Error trackers record the local variables of every frame an error
   passes through, and scrub them by name (`api_key`, `secret`, `password`) at best. So no frame
-  of the SDK that an error passes through keeps a secret under another name: a webhook
+  of the SDK that an error passes through keeps the SDK's secrets under another name: a webhook
   verification error leaves neither the decoded signing key nor the expected signature behind,
   a failed .p12 upload leaves neither the file nor its password, whatever raised (the
   traceback is kept, down to a file's own `read()`), and the API key stays only in the caller's
   `api_key` argument: no other local of a failed request (whose `httpx.Headers` hide it only in
   their repr) or of a refused setting or key keeps it. The frames of httpx and httpcore, in the
-  cause of a network error, are not changed.
+  cause of a network error, are not changed, and neither are the headers a caller passes, which
+  the caller's own frames hold too.
 - **Runtimes.** There is no counterpart of Node's browser guard (Pyodide is not refused).
 - **Webhooks.** A signed body that is not a JSON object is refused. A `webhook-id` that cannot
   be encoded as UTF-8 (a framework's surrogate escape of other bytes) ends at
