@@ -1,0 +1,7 @@
+# Normalize line endings for everything we author.
+* text=auto eol=lf
+
+# A copy of the public OpenAPI document of the Flashpi API (`uv run python scripts/openapi.py sync`).
+openapi/openapi.json linguist-generated
+# Generated from that copy (`uv run python scripts/openapi.py generate`).
+src/flashpi/types/_generated.py linguist-generated
