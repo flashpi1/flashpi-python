@@ -49,8 +49,9 @@ decided, and are listed so they can be confirmed or changed before 1.0.
   behave as in the Node SDK, with seconds instead of milliseconds. The timeout is one deadline
   for the whole attempt, from sending it to reading the whole answer, as Node's
   AbortController: `AsyncFlashpi` wraps the attempt in `asyncio.timeout()` (cancelling the task
-  still cancels the call), and `Flashpi` checks the deadline as each chunk of the answer arrives,
-  so an answer that trickles in times out too.
+  still cancels the call), and `Flashpi` limits each network operation of the attempt to the
+  time it has left, so an answer that trickles in times out too (with a caller's `http_client`,
+  see Requests below).
 - **Porting choices the owner confirmed on 2026-11-13.** Chosen while porting, then confirmed
   as proposed:
   - `list()` takes its filters as a dict with the API's camelCase keys,
@@ -101,21 +102,27 @@ decided, and are listed so they can be confirmed or changed before 1.0.
   break, a control character or a character outside ASCII raises `FlashpiError` when the client
   is created, without showing the key (Node sends inner spaces and leaks a key with a line break
   in its `TypeError`).
-- **Requests.** On `Flashpi`, the deadline of an attempt is checked as each chunk of the answer
-  arrives: until the answer starts, httpx limits connecting, sending, waiting for a pooled
-  connection and waiting for the answer to the timeout each, and one stalled read can add up to
-  one more timeout. A body that the response hooks of a caller's `http_client` read is checked
-  only once it has been read. The in-progress wait counts wall time. Timeouts are capped at 2147483.647 s,
-  Node's `setTimeout` limit, only so both SDKs accept the same values. A 3xx answer raises
-  `APIError`, `base_url` must be an http(s) URL with a host, and the client closes only an httpx
-  client it created. In an issue with `options.waitForAuthorization`, a `waitTimeoutSeconds`
-  that is not a number counts as the default 15. A .p12 upload sends the password field before
-  the file, whose content type is always `application/x-pkcs12`. A file object is read once, in
-  pieces, up to one byte past 1 MiB (a bigger file is refused without being read whole, as
-  "more than 1048576 bytes"), and not closed; an async reader (`async def read`) is refused with
-  `TypeError`, and a non-blocking stream with no data ready (its `read()` returns None) with
-  `FlashpiError`. The repr of a multipart body lists only its part names, never the .p12 or its
-  password.
+- **Requests.** On `Flashpi`, the httpx client the SDK creates gets a network backend that
+  limits connecting, the TLS handshake, each write and each read of an attempt to the time the
+  attempt has left, also through the proxies of the environment, which it keeps. It reaches
+  httpcore, which httpx always installs, through private attributes of httpx and httpcore that
+  the tests pin. Only a DNS lookup, which Python cannot interrupt, and connecting to a host that
+  has several addresses can run past the deadline. With a caller's `http_client`, the deadline
+  is checked as each chunk of the answer's body arrives and once the answer is read: before the
+  body, httpx limits connecting, each write, waiting for a pooled connection and each read of
+  the status line and headers to the timeout one by one, so headers that trickle in can keep an
+  attempt going far past its timeout, and a body that the client's own response hooks read is
+  checked only once it has been read. The in-progress wait counts wall time. Timeouts are capped
+  at 2147483.647 s, Node's `setTimeout` limit, only so both SDKs accept the same values. A 3xx
+  answer raises `APIError`, `base_url` must be an http(s) URL with a host, and the client closes
+  only an httpx client it created. In an issue with `options.waitForAuthorization`, a
+  `waitTimeoutSeconds` that is not a number counts as the default 15. A .p12 upload sends the
+  password field before the file, whose content type is always `application/x-pkcs12`. A file
+  object is read once, in pieces, up to one byte past 1 MiB (a bigger file is refused without
+  being read whole, as "more than 1048576 bytes"), and not closed; an async reader
+  (`async def read`) is refused with `TypeError`, and a non-blocking stream with no data ready
+  (its `read()` returns None) with `FlashpiError`. The repr of a multipart body lists only its
+  part names, never the .p12 or its password.
 - **Secrets in tracebacks.** Error trackers record the local variables of every frame an error
   passes through, and scrub them by name (`api_key`, `secret`, `password`) at best. So no frame
   of the SDK that an error passes through keeps a secret under another name: a webhook

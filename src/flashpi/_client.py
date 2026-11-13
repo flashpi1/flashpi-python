@@ -10,6 +10,7 @@ import httpx
 
 from ._errors import FlashpiError
 from ._http import AsyncEngine, ClientConfig, SyncEngine
+from ._network import limit_to_attempt_deadlines
 from ._validate import checked_headers, header_value, valid_retries, valid_timeout
 from ._webhooks import Webhooks
 from .resources.documents import (
@@ -215,8 +216,9 @@ class Flashpi:
             base_url: The API's address (default https://api.flashpi.com.ec).
             timeout: Seconds each attempt of a request may take, from sending it to reading the
                 whole answer (default 60). Issuing with `options.waitForAuthorization` raises it,
-                on both clients, to the wait plus 15 seconds. On `Flashpi` the deadline is
-                checked as the answer arrives, so one stalled read can add up to one timeout.
+                on both clients, to the wait plus 15 seconds. On `Flashpi`, only a DNS lookup,
+                which Python cannot interrupt, and connecting to a host that has several
+                addresses can run past it (but see `http_client`).
             max_retries: Retries after network errors, timeouts, 429 and 5xx (default 2; 0 turns
                 them off).
             language: Language of the API's messages: `en` (default) or `es`. Error codes do not
@@ -224,9 +226,12 @@ class Flashpi:
             default_headers: Headers sent with every request (not `Idempotency-Key`: that one is
                 per request).
             http_client: An `httpx.Client` to send the requests with (proxies, tests). The SDK
-                never follows redirects, and leaves closing this client to you. A body that this
-                client's own response hooks read is checked against the deadline only once it
-                has been read.
+                never follows redirects, and leaves closing this client to you. With it, the
+                deadline is checked as each chunk of the answer's body arrives: before that,
+                httpx limits connecting, each write, waiting for a pooled connection and each
+                read of the status line and headers to the timeout one by one, so headers that
+                trickle in can keep an attempt going far past its timeout, and a body that this
+                client's own response hooks read is checked only once it has been read.
         """
         config, self.environment = _configure(
             api_key,
@@ -241,7 +246,10 @@ class Flashpi:
                 "http_client must be an httpx.Client (AsyncFlashpi takes an httpx.AsyncClient)"
             )
         self._owns_http_client = http_client is None
-        self._http_client = http_client or httpx.Client(follow_redirects=False)
+        if http_client is None:
+            http_client = httpx.Client(follow_redirects=False)
+            limit_to_attempt_deadlines(http_client)
+        self._http_client = http_client
         self._engine = SyncEngine(config, self._http_client)
         self.invoices = Invoices(self._engine)
         self.credit_notes = CreditNotes(self._engine)

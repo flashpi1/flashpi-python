@@ -18,6 +18,7 @@ from urllib.parse import quote, urlencode
 import httpx
 
 from ._errors import APIConnectionError, APIError, APITimeoutError, FlashpiError, api_error
+from ._network import attempt_deadline
 from ._response import APIResponse
 from ._validate import MAX_TIMEOUT, checked_headers, header_value, valid_retries, valid_timeout
 from ._version import VERSION
@@ -60,7 +61,8 @@ class RequestOptions(TypedDict, total=False):
 
     timeout: float | None
     """Seconds each attempt may take, from sending it to reading the whole answer, overriding the
-    client's `timeout`."""
+    client's `timeout` (on `Flashpi` with an `http_client` of yours, see `Flashpi()` for the
+    limits)."""
 
     max_retries: int | None
     """Retries after network errors, timeouts, 429 and 5xx, overriding the client's
@@ -567,23 +569,29 @@ class SyncEngine:
             steps.close()
 
     def _send(self, step: Attempt) -> APIResponse[Any] | APIError:
-        """One attempt within its deadline. httpx limits connecting, sending and each read to the
-        attempt's timeout; the deadline is checked as each chunk of the answer arrives, so an
-        answer that trickles in still times out (one stalled read can add up to one timeout)."""
+        """One attempt within its deadline, from sending it to reading the whole answer.
+
+        On the httpx client the SDK created, every network operation is limited to the time the
+        attempt has left (`_network`). On a caller's, httpx limits connecting, each write,
+        waiting for a pooled connection and each read of the status line and headers to the
+        timeout one by one, and the deadline is checked as each chunk of the body arrives and
+        once the answer is read.
+        """
         request = self.http_client.build_request(**request_arguments(step))
         deadline = _monotonic() + step.timeout
         try:
-            response = self.http_client.send(request, follow_redirects=False, stream=True)
-            try:
-                stream = cast("httpx.SyncByteStream", response.stream)
-                response.stream = _DeadlineStream(stream, deadline, request)
-                response.read()
-                # Also an answer whose end came late, and one the http_client's own response
-                # hooks read before the stream above could check it.
-                if _monotonic() > deadline:
-                    raise httpx.ReadTimeout("The attempt's deadline passed", request=request)
-            finally:
-                response.close()
+            with attempt_deadline(lambda: deadline - _monotonic()):
+                response = self.http_client.send(request, follow_redirects=False, stream=True)
+                try:
+                    stream = cast("httpx.SyncByteStream", response.stream)
+                    response.stream = _DeadlineStream(stream, deadline, request)
+                    response.read()
+                    # Also an answer whose end came late, and one the http_client's own response
+                    # hooks read before the stream above could check it.
+                    if _monotonic() > deadline:
+                        raise httpx.ReadTimeout("The attempt's deadline passed", request=request)
+                finally:
+                    response.close()
         except httpx.TimeoutException as error:
             raise timeout_error(step) from error
         except httpx.LocalProtocolError:
