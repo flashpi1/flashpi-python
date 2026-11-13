@@ -23,7 +23,7 @@ from flashpi import (
     verify_webhook_signature,
 )
 from flashpi.types import ThinWebhookEvent, WebhookEvent
-from tests.support import TEST_KEY
+from tests.support import TEST_KEY, secret_in_frames
 
 
 class Vector(NamedTuple):
@@ -380,8 +380,8 @@ class TestHardening:
         calls: list[bytes] = []
         original = hmac.new
 
-        def counting(key: bytes, message: bytes, digestmod: Any) -> Any:
-            calls.append(message)
+        def counting(key: bytes, message: bytes | None = None, digestmod: Any = None) -> Any:
+            calls.append(message or b"")
             return original(key, message, digestmod)
 
         monkeypatch.setattr(hmac, "new", counting)
@@ -391,6 +391,56 @@ class TestHardening:
         )
         assert event["type"] == "invoice.authorized"
         assert len(calls) == 1
+
+    @pytest.mark.parametrize(
+        ("headers", "payload", "expected"),
+        [
+            (headers_of(FLASHPI, DECOY), FLASHPI.body, "no_matching_signature"),
+            (
+                {**headers_of(FLASHPI), "webhook-id": "\udcff"},
+                FLASHPI.body,
+                "no_matching_signature",
+            ),
+            ({"webhook-id": FLASHPI.id}, FLASHPI.body, "missing_headers"),
+            ({**headers_of(FLASHPI), "webhook-timestamp": "x"}, FLASHPI.body, "invalid_timestamp"),
+            (
+                {**headers_of(FLASHPI), "webhook-timestamp": "1"},
+                FLASHPI.body,
+                "timestamp_out_of_range",
+            ),
+            (headers_of(FLASHPI), {"parsed": True}, "invalid_payload"),
+            (headers_of(FLASHPI), "\ud800", "invalid_payload"),
+        ],
+        ids=[
+            "bad signature",
+            "id not utf-8",
+            "missing headers",
+            "bad timestamp",
+            "stale",
+            "parsed body",
+            "body not utf-8",
+        ],
+    )
+    def test_keeps_the_key_and_the_expected_signature_out_of_the_frames_of_its_errors(
+        self, headers: dict[str, str], payload: object, expected: str
+    ) -> None:
+        key = base64.b64decode(FLASHPI.secret.removeprefix("whsec_"))
+        signed = f"{FLASHPI.id}.{FLASHPI.timestamp}.{FLASHPI.body}".encode()
+        signature = hmac.new(key, signed, hashlib.sha256).digest()
+        for check in (unwrap_webhook, verify_webhook_signature, Flashpi(TEST_KEY).webhooks.unwrap):
+            with pytest.raises(WebhookVerificationError) as caught:
+                check(cast("str", payload), headers, FLASHPI.secret, now=at(FLASHPI))
+            assert caught.value.reason == expected
+            assert secret_in_frames(caught.value, key) == []
+            assert secret_in_frames(caught.value, signature) == []
+
+    def test_keeps_an_incomplete_key_out_of_the_frames_of_its_error(self) -> None:
+        key = bytes(range(23))
+        secret = "whsec_" + base64.b64encode(key).decode()
+        with pytest.raises(WebhookVerificationError) as caught:
+            unwrap_webhook(FLASHPI.body, headers_of(FLASHPI), secret, now=at(FLASHPI))
+        assert caught.value.reason == "invalid_secret"
+        assert secret_in_frames(caught.value, key) == []
 
     @pytest.mark.parametrize(
         "secret",

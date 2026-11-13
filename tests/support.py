@@ -4,12 +4,15 @@ operation on the sync or the async client, so every behavior test covers both.""
 import asyncio
 import inspect
 import json
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence, Set
 from functools import cached_property
+from pathlib import Path
+from types import FrameType
 from typing import Any, Literal, TypeAlias, Unpack, cast
 
 import httpx
 
+import flashpi
 from flashpi import AsyncFlashpi, Flashpi, Page, RequestOptions
 from flashpi._http import Multipart, RequestSpec, path_of
 from flashpi._pagination import AsyncPage, AsyncPaginator, ListBody
@@ -149,6 +152,58 @@ def timeout_after(clock: Clock, seconds: float) -> Handler:
         raise httpx.ReadTimeout("timed out", request=request)
 
     return reply
+
+
+# What error trackers record.
+
+SDK_DIRECTORY = Path(flashpi.__file__).parent
+
+
+def secret_in_frames(
+    error: BaseException, secret: str | bytes, allowed: Collection[str] = ()
+) -> list[str]:
+    """The local variables of the SDK's frames that show `secret`, as `function:name`, in the
+    traceback of `error` and of the errors it chains. They are searched as error trackers record
+    them: mappings, sequences and sets item by item, other objects by their repr. Locals named in
+    `allowed` (a caller's own `api_key` argument, which trackers scrub by name) are skipped."""
+    found: list[str] = []
+    for frame in _frames(error):
+        if not Path(frame.f_code.co_filename).is_relative_to(SDK_DIRECTORY):
+            continue
+        for name, value in list(frame.f_locals.items()):
+            if name not in allowed and _shows(value, secret):
+                found.append(f"{frame.f_code.co_qualname}:{name}")
+    return found
+
+
+def _frames(error: BaseException) -> Iterable[FrameType]:
+    seen: set[int] = set()
+    pending: list[BaseException | None] = [error]
+    while pending:
+        current = pending.pop()
+        if current is None or id(current) in seen:
+            continue
+        seen.add(id(current))
+        trace = current.__traceback__
+        while trace is not None:
+            yield trace.tb_frame
+            trace = trace.tb_next
+        pending += [current.__cause__, current.__context__]
+
+
+def _shows(value: object, secret: str | bytes, depth: int = 0) -> bool:
+    raw = secret.encode() if isinstance(secret, str) else secret
+    if isinstance(value, str):
+        return isinstance(secret, str) and secret in value
+    if isinstance(value, bytes | bytearray | memoryview):
+        return raw in bytes(cast("bytes", value))
+    if depth < 8 and isinstance(value, Mapping):
+        items = list(cast("Mapping[object, object]", value).items())
+        return any(_shows(k, secret, depth + 1) or _shows(v, secret, depth + 1) for k, v in items)
+    if depth < 8 and isinstance(value, Sequence | Set):
+        members = list(cast("Iterable[object]", value))
+        return any(_shows(member, secret, depth + 1) for member in members)
+    return (secret if isinstance(secret, str) else repr(secret)[2:-1]) in repr(value)
 
 
 # Test resources, declared as the real resources declare their operations.

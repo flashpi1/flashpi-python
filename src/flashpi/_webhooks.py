@@ -59,7 +59,9 @@ def verify_webhook_signature(
         now: The current time, for tests: a datetime or Unix seconds (default: the clock).
     """
     tolerance_seconds, now_seconds = _verify_options(tolerance, now)
-    key = _secret_bytes(secret)
+    # Error trackers record the local variables of the frames an error passes through, so none
+    # of the frames that raise keeps the decoded key or the expected signature.
+    signer = _signer(secret)
     webhook_id = _header(headers, "webhook-id")
     timestamp = _header(headers, "webhook-timestamp")
     signatures = _header(headers, "webhook-signature")
@@ -85,20 +87,8 @@ def verify_webhook_signature(
         raise WebhookVerificationError(
             "no_matching_signature", "No webhook-signature matches the body and the secret"
         ) from None
-    signed = prefix + _payload_bytes(payload)
-    # One HMAC per request, however many signatures the header lists.
-    expected = hmac.new(key, signed, hashlib.sha256).digest()
-    for entry in signatures.split(" "):
-        version, comma, encoded = entry.partition(",")
-        if not comma or version != "v1":
-            continue
-        signature = _decode_base64(encoded)
-        if (
-            signature is not None
-            and len(signature) == _SIGNATURE_BYTES
-            and hmac.compare_digest(signature, expected)
-        ):
-            return
+    if _signed(signer, prefix + _payload_bytes(payload), signatures):
+        return
     raise WebhookVerificationError(
         "no_matching_signature", "No webhook-signature matches the body and the secret"
     )
@@ -177,7 +167,29 @@ def _header(headers: WebhookHeaders, name: str) -> str | None:
     return " ".join(values) if name == "webhook-signature" else values[0]
 
 
-def _secret_bytes(secret: object) -> bytes:
+def _signed(signer: hmac.HMAC, message: bytes, signatures: str) -> bool:
+    """Whether a v1 signature of the header signs `message`. It returns instead of raising, so
+    the expected signature never stays in the frame of an error."""
+    # One HMAC per request, however many signatures the header lists.
+    signer.update(message)
+    expected = signer.digest()
+    for entry in signatures.split(" "):
+        version, comma, encoded = entry.partition(",")
+        if not comma or version != "v1":
+            continue
+        signature = _decode_base64(encoded)
+        if (
+            signature is not None
+            and len(signature) == _SIGNATURE_BYTES
+            and hmac.compare_digest(signature, expected)
+        ):
+            return True
+    return False
+
+
+def _signer(secret: object) -> hmac.HMAC:
+    """An HMAC-SHA256 keyed with the decoded secret. When the secret is refused, the decoded key
+    is dropped before raising: an incomplete key is still most of the secret."""
     if not isinstance(secret, str) or secret.strip() == "":
         raise WebhookVerificationError(
             "invalid_secret",
@@ -185,17 +197,19 @@ def _secret_bytes(secret: object) -> bytes:
             "webhook_endpoints.get_secret()",
         )
     key = _decode_base64(secret.strip().removeprefix(_SECRET_PREFIX))
-    if not key:
+    size = len(key) if key else 0
+    if key and _MIN_SECRET_BYTES <= size <= _MAX_SECRET_BYTES:
+        return hmac.new(key, digestmod=hashlib.sha256)
+    del key
+    if size == 0:
         raise WebhookVerificationError(
             "invalid_secret", "The webhook secret is not a whsec_ secret (base64 after the prefix)"
         )
-    if not _MIN_SECRET_BYTES <= len(key) <= _MAX_SECRET_BYTES:
-        raise WebhookVerificationError(
-            "invalid_secret",
-            "The webhook secret is not a complete whsec_ secret: copy it again from the console "
-            "or webhook_endpoints.get_secret()",
-        )
-    return key
+    raise WebhookVerificationError(
+        "invalid_secret",
+        "The webhook secret is not a complete whsec_ secret: copy it again from the console "
+        "or webhook_endpoints.get_secret()",
+    )
 
 
 def _verify_options(tolerance: object, now: object) -> tuple[float, float]:
