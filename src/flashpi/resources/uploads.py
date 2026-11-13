@@ -3,6 +3,7 @@
 
 import inspect
 from collections.abc import Mapping
+from types import TracebackType
 from typing import cast
 
 from flashpi._errors import FlashpiError
@@ -17,6 +18,29 @@ CONTENT_TYPE = "application/x-pkcs12"
 
 
 def certificate_form(upload: CertificateUpload) -> Multipart:
+    """See `_certificate_form`. Error trackers record the local variables of every frame an error
+    passes through, so whatever it raises leaves this module's frames without theirs (the .p12
+    and its password), and this frame drops the upload. The traceback itself is kept, down to a
+    file's own `read()`."""
+    try:
+        return _certificate_form(upload)
+    except Exception as error:
+        _forget_locals(error.__traceback__)
+        raise
+    finally:
+        del upload
+
+
+def _forget_locals(trace: TracebackType | None) -> None:
+    # The first entry is certificate_form, still running; the others have returned.
+    trace = trace.tb_next if trace is not None else None
+    while trace is not None:
+        if trace.tb_frame.f_globals is globals():
+            trace.tb_frame.clear()
+        trace = trace.tb_next
+
+
+def _certificate_form(upload: CertificateUpload) -> Multipart:
     """The multipart body of a .p12 upload: one `file` part and one `password` field.
 
     The file is read once here, so every retry sends the same bytes (a file object could not be

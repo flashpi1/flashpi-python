@@ -4,7 +4,7 @@ certificates. Needs an account-scoped API key with read_write access, also to re
 from functools import cached_property
 from typing import Unpack
 
-from flashpi._http import AsyncEngine, RequestOptions, RequestSpec, SyncEngine, path_of
+from flashpi._http import AsyncEngine, Multipart, RequestOptions, RequestSpec, SyncEngine, path_of
 from flashpi._pagination import AsyncPaginator, ListBody, Page
 from flashpi._resource import AsyncAPIResource, SyncAPIResource
 from flashpi._response import async_response_wrapper, response_wrapper
@@ -136,10 +136,11 @@ def delete_emission_point(
 
 
 def upload_certificate(
-    issuer_id: str, upload: CertificateUpload, options: RequestOptions
+    issuer_id: str, form: Multipart, options: RequestOptions
 ) -> RequestSpec[Certificate]:
+    """The upload of a .p12 whose form `certificate_form()` built. The methods build it first and
+    drop the caller's upload, so no frame of an error keeps the .p12 or its password."""
     path = path_of(CERTIFICATES, issuer_id)
-    form = certificate_form(upload)
     return RequestSpec[Certificate](method="POST", path=path, multipart=form, options=options)
 
 
@@ -290,7 +291,11 @@ class Certificates(SyncAPIResource):
         status cannot be checked) or `rejected` (no event: follow it with `get()` and read
         `rejection`).
         """
-        return self._request(upload_certificate(issuer_id, upload, options))
+        try:
+            form = certificate_form(upload)
+        finally:
+            del upload  # the .p12 and its password: error trackers record local variables
+        return self._request(upload_certificate(issuer_id, form, options))
 
     def list(
         self,
@@ -509,7 +514,11 @@ class AsyncCertificates(AsyncAPIResource):
         status cannot be checked) or `rejected` (no event: follow it with `get()` and read
         `rejection`).
         """
-        return await self._request(upload_certificate(issuer_id, upload, options))
+        try:
+            form = certificate_form(upload)
+        finally:
+            del upload  # the .p12 and its password: error trackers record local variables
+        return await self._request(upload_certificate(issuer_id, form, options))
 
     def list(
         self,

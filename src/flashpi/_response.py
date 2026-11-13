@@ -69,6 +69,7 @@ def response_wrapper(method: Callable[P, T]) -> Callable[P, APIResponse[T]]:
             data = method(*args, **kwargs)
         finally:
             _capture.reset(token)
+            del args, kwargs  # a .p12 and its password: error trackers record local variables
         return _finish(capture, data)
 
     return wrapped
@@ -88,6 +89,7 @@ def async_response_wrapper(
             data = await method(*args, **kwargs)
         finally:
             _capture.reset(token)
+            del args, kwargs  # a .p12 and its password: error trackers record local variables
         return _finish(capture, data)
 
     return wrapped

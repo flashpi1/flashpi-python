@@ -117,7 +117,9 @@ decided, and are listed so they can be confirmed or changed before 1.0.
 - **Secrets in tracebacks.** Error trackers record the local variables of every frame an error
   passes through, and scrub them by name (`api_key`, `secret`, `password`) at best. So no frame
   of the SDK that an error passes through keeps a secret under another name: a webhook
-  verification error leaves neither the decoded signing key nor the expected signature behind.
+  verification error leaves neither the decoded signing key nor the expected signature behind,
+  and a failed .p12 upload leaves neither the file nor its password, whatever raised (the
+  traceback is kept, down to a file's own `read()`).
 - **Runtimes.** There is no counterpart of Node's browser guard (Pyodide is not refused).
 - **Webhooks.** A signed body that is not a JSON object is refused. A `webhook-id` that cannot
   be encoded as UTF-8 (a framework's surrogate escape of other bytes) ends at

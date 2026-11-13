@@ -23,6 +23,7 @@ from tests.support import (
     json_response,
     page,
     problem,
+    secret_in_frames,
     sent_json,
     timeout_after,
 )
@@ -672,6 +673,68 @@ class TestCertificateUploads:
         with pytest.raises(error, match=message):
             await api.op("issuers.certificates.upload", ISSUER, upload)
         assert api.sent == []
+
+
+SECRET_P12 = b"0\x82PRIVATE-KEY-OF-THE-ISSUER"
+PASSWORD = "Passw0rd-of-the-p12"  # noqa: S105 (a test value)
+
+
+class Unreadable:
+    """A binary file whose read() fails (a network share that went away)."""
+
+    def read(self, size: int = -1) -> bytes:
+        raise OSError("Stale file handle")
+
+
+def closed_file() -> io.BytesIO:
+    file = io.BytesIO(SECRET_P12)
+    file.close()
+    return file
+
+
+class TestTheFramesOfAnUploadError:
+    """Error trackers record the local variables of the frames an error passes through: none of
+    the SDK's keeps the .p12 or its password, however the upload fails."""
+
+    @pytest.mark.parametrize("name", ["issuers.certificates.upload", "issuer_onboardings.create"])
+    @pytest.mark.parametrize("with_response", [False, True], ids=["plain", "with_response"])
+    @pytest.mark.parametrize(
+        ("file", "answered", "error"),
+        [
+            (lambda: SECRET_P12, True, FlashpiError),
+            (lambda: io.BytesIO(SECRET_P12), True, FlashpiError),
+            (lambda: SECRET_P12 * 40_000, False, FlashpiError),
+            (closed_file, False, ValueError),
+            (Unreadable, False, OSError),
+        ],
+        ids=["answer", "file answer", "too big", "closed file", "read fails"],
+    )
+    async def test_none_of_its_frames_keeps_the_file_or_the_password(
+        self,
+        make: MakeApi,
+        name: str,
+        with_response: bool,
+        file: Callable[[], object],
+        answered: bool,
+        error: type[Exception],
+    ) -> None:
+        api = make(*([problem(422, "invalid_certificate")] if answered else []))
+        upload = {"file": file(), "password": PASSWORD, "filename": "firma.p12"}
+        args = (upload,) if name == "issuer_onboardings.create" else (ISSUER, upload)
+        call = api.op_with_response if with_response else api.op
+        with pytest.raises(error) as caught:
+            await call(name, *args)
+        assert secret_in_frames(caught.value, PASSWORD) == []
+        assert secret_in_frames(caught.value, SECRET_P12) == []
+
+    async def test_keeps_the_traceback_down_to_the_files_own_read(self, make: MakeApi) -> None:
+        api = make()
+        upload = {"file": Unreadable(), "password": PASSWORD}
+        with pytest.raises(OSError, match="Stale file handle") as caught:
+            await api.op("issuers.certificates.upload", ISSUER, upload)
+        names = [entry.name for entry in caught.traceback]
+        assert names[-3:] == ["_certificate_form", "_read", "read"]
+        assert secret_in_frames(caught.value, PASSWORD) == []
 
 
 EMPTY: dict[str, Any] = {}

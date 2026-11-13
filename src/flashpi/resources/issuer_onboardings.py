@@ -3,7 +3,7 @@
 from functools import cached_property
 from typing import Unpack
 
-from flashpi._http import RequestOptions, RequestSpec, path_of
+from flashpi._http import Multipart, RequestOptions, RequestSpec, path_of
 from flashpi._resource import AsyncAPIResource, SyncAPIResource
 from flashpi._response import async_response_wrapper, response_wrapper
 from flashpi.resources.uploads import certificate_form
@@ -15,10 +15,10 @@ from flashpi.types import (
 )
 
 
-def create_spec(
-    upload: CertificateUpload, options: RequestOptions
-) -> RequestSpec[IssuerOnboarding]:
-    form = certificate_form(upload)
+def create_spec(form: Multipart, options: RequestOptions) -> RequestSpec[IssuerOnboarding]:
+    """An onboarding with the .p12 whose form `certificate_form()` built. `create()` builds it
+    first and drops the caller's upload, so no frame of an error keeps the .p12 or its
+    password."""
     return RequestSpec[IssuerOnboarding](
         method="POST", path="/v1/issuer-onboardings", multipart=form, options=options
     )
@@ -50,7 +50,11 @@ class IssuerOnboardings(SyncAPIResource):
         self, upload: CertificateUpload, **options: Unpack[RequestOptions]
     ) -> IssuerOnboarding:
         """Starts an onboarding with a .p12 and its password. It starts `verifying`."""
-        return self._request(create_spec(upload, options))
+        try:
+            form = certificate_form(upload)
+        finally:
+            del upload  # the .p12 and its password: error trackers record local variables
+        return self._request(create_spec(form, options))
 
     def get(self, onboarding_id: str, **options: Unpack[RequestOptions]) -> IssuerOnboarding:
         """Retrieves an onboarding, to follow it while it is `verifying`."""
@@ -94,7 +98,11 @@ class AsyncIssuerOnboardings(AsyncAPIResource):
         self, upload: CertificateUpload, **options: Unpack[RequestOptions]
     ) -> IssuerOnboarding:
         """Starts an onboarding with a .p12 and its password. It starts `verifying`."""
-        return await self._request(create_spec(upload, options))
+        try:
+            form = certificate_form(upload)
+        finally:
+            del upload  # the .p12 and its password: error trackers record local variables
+        return await self._request(create_spec(form, options))
 
     async def get(self, onboarding_id: str, **options: Unpack[RequestOptions]) -> IssuerOnboarding:
         """Retrieves an onboarding, to follow it while it is `verifying`."""
