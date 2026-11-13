@@ -2,6 +2,7 @@
 Node SDK's AbortController: an answer that trickles in times out like one that never comes."""
 
 import asyncio
+import gzip
 from collections.abc import AsyncIterator, Iterator
 
 import httpx
@@ -100,6 +101,19 @@ class TestOnFlashpi:
         assert result.data == {"status": "operational"}
         assert result.response.content == b"".join(BODY)
         assert body.closed
+
+    def test_decodes_a_compressed_answer_once(self, clock: Clock) -> None:
+        compressed = gzip.compress(b"".join(BODY))
+        chunks = [compressed[:10], compressed[10:]]
+        answer = httpx.Response(
+            200,
+            stream=Trickle(clock, chunks, 0.1),
+            headers={"content-type": "application/json", "content-encoding": "gzip"},
+        )
+        client, _ = sync_client(answer, timeout=1)
+        result = client.things.with_response.get("x")
+        assert result.data == {"status": "operational"}
+        assert result.response.content == b"".join(BODY)
 
     def test_times_out_an_empty_answer_whose_end_arrives_late(self, clock: Clock) -> None:
         late_end = Trickle(clock, [], 0)
