@@ -10,6 +10,7 @@ import httpx
 from ._errors import FlashpiError
 from ._http import AsyncEngine, ClientConfig, SyncEngine
 from ._validate import valid_retries, valid_timeout
+from ._webhooks import Webhooks
 from .types import Environment, Language
 
 DEFAULT_BASE_URL = "https://api.flashpi.com.ec"
@@ -94,6 +95,9 @@ class Flashpi:
     environment: Environment
     """`test` for fp_test_ keys (SRI pruebas), `live` for fp_live_ keys (SRI production)."""
 
+    webhooks: Webhooks
+    """Verify the signature of the webhooks you receive (no API key needed)."""
+
     def __init__(
         self,
         api_key: str | None = None,
@@ -137,6 +141,7 @@ class Flashpi:
         self._owns_http_client = http_client is None
         self._http_client = http_client or httpx.Client(follow_redirects=False)
         self._engine = SyncEngine(config, self._http_client)
+        self.webhooks = Webhooks()
 
     def close(self) -> None:
         """Closes the connections, unless the http_client came from you."""
@@ -175,6 +180,9 @@ class AsyncFlashpi:
     environment: Environment
     """`test` for fp_test_ keys (SRI pruebas), `live` for fp_live_ keys (SRI production)."""
 
+    webhooks: Webhooks
+    """Verify the signature of the webhooks you receive (no API key needed)."""
+
     def __init__(
         self,
         api_key: str | None = None,
@@ -205,6 +213,7 @@ class AsyncFlashpi:
         self._owns_http_client = http_client is None
         self._http_client = http_client or httpx.AsyncClient(follow_redirects=False)
         self._engine = AsyncEngine(config, self._http_client)
+        self.webhooks = Webhooks()
 
     async def aclose(self) -> None:
         """Closes the connections, unless the http_client came from you."""
