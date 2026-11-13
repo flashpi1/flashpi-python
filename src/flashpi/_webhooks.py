@@ -77,7 +77,15 @@ def verify_webhook_signature(
             f"The webhook-timestamp is more than {tolerance_seconds:g} seconds away from now",
         )
 
-    signed = f"{webhook_id}.{timestamp}.".encode() + _payload_bytes(payload)
+    try:
+        prefix = f"{webhook_id}.{timestamp}.".encode()
+    except UnicodeEncodeError:
+        # A webhook-id that is not text (a framework's surrogate escape of non-UTF-8 bytes) was
+        # not signed by Flashpi; Node's TextEncoder ends at the same reason.
+        raise WebhookVerificationError(
+            "no_matching_signature", "No webhook-signature matches the body and the secret"
+        ) from None
+    signed = prefix + _payload_bytes(payload)
     # One HMAC per request, however many signatures the header lists.
     expected = hmac.new(key, signed, hashlib.sha256).digest()
     for entry in signatures.split(" "):

@@ -237,6 +237,25 @@ class TestVerifyWebhookSignature:
         )
         assert reason(check) == "invalid_payload"
 
+    def test_rejects_a_webhook_id_with_bytes_that_are_not_utf8(self) -> None:
+        # aiohttp and the WSGI servers decode such bytes as lone surrogates (surrogateescape).
+        garbled = {
+            **headers_of(FLASHPI),
+            "webhook-id": b"msg_\xff".decode("utf-8", "surrogateescape"),
+        }
+        verify = lambda: verify_webhook_signature(  # noqa: E731
+            FLASHPI.body, garbled, FLASHPI.secret, now=at(FLASHPI)
+        )
+        unwrap = lambda: unwrap_webhook(  # noqa: E731
+            FLASHPI.body, garbled, FLASHPI.secret, now=at(FLASHPI)
+        )
+        assert reason(verify) == "no_matching_signature"
+        assert reason(unwrap) == "no_matching_signature"
+        with pytest.raises(WebhookVerificationError) as caught:
+            verify()
+        assert caught.value.__cause__ is None
+        assert caught.value.__suppress_context__
+
     def test_reads_headers_in_any_letter_case_and_joins_repeated_signatures(self) -> None:
         class MultiHeaders(Mapping[str, str]):
             """Headers whose items repeat a name, like Starlette's."""
