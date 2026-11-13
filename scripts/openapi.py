@@ -21,10 +21,12 @@ import keyword
 import os
 import sys
 import textwrap
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
+from http.client import HTTPMessage
 from pathlib import Path
-from typing import TypeAlias, cast
+from typing import IO, TypeAlias, cast
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACT_PATH = ROOT / "openapi" / "openapi.json"
@@ -573,12 +575,38 @@ def download() -> tuple[str, str]:
     if source_file:
         return source_file, Path(source_file).read_text(encoding="utf-8")
     url = os.environ.get("FLASHPI_OPENAPI_URL", DEFAULT_URL)
-    if not url.startswith("https://"):
+    if not _is_https(url):
         raise SystemExit(f"Refusing to download the contract over a non-HTTPS URL: {url}")
     request = urllib.request.Request(url, headers={"accept": "application/json"})
-    with urllib.request.urlopen(request, timeout=60) as response:
+    opener = urllib.request.build_opener(HttpsOnlyRedirects())
+    with opener.open(request, timeout=60) as response:
+        final_url: str = response.geturl()
+        if not _is_https(final_url):
+            raise SystemExit(f"Refusing a contract served from a non-HTTPS URL: {final_url}")
         body: bytes = response.read()
     return url, body.decode("utf-8")
+
+
+class HttpsOnlyRedirects(urllib.request.HTTPRedirectHandler):
+    """Follows redirects to HTTPS URLs only: any other is refused before it is requested (urllib
+    alone follows an https:// to http:// redirect)."""
+
+    def redirect_request(  # noqa: PLR0917 (urllib's signature)
+        self,
+        req: urllib.request.Request,
+        fp: IO[bytes],
+        code: int,
+        msg: str,
+        headers: HTTPMessage,
+        newurl: str,
+    ) -> urllib.request.Request | None:
+        if not _is_https(newurl):
+            raise SystemExit(f"Refusing a redirect to a non-HTTPS URL: {newurl}")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _is_https(url: str) -> bool:
+    return urllib.parse.urlsplit(url).scheme == "https"
 
 
 def main(argv: list[str]) -> int:

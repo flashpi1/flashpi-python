@@ -1,8 +1,13 @@
 """The generator of src/flashpi/types/_generated.py and the faithfulness of what it generates."""
 
+import email.message
+import io
 import json
 import types
 import typing
+import urllib.request
+import urllib.response
+from http.client import HTTPMessage
 from pathlib import Path
 from typing import Any, Literal, NotRequired, TypedDict, Union, cast, get_args, get_origin
 
@@ -64,6 +69,78 @@ def test_sync_refuses_a_plain_http_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("FLASHPI_OPENAPI_URL", "http://example.com/openapi.json")
     with pytest.raises(SystemExit, match="non-HTTPS"):
         openapi.main(["openapi.py", "sync"])
+
+
+class FakeHttps(urllib.request.BaseHandler):
+    """Answers https:// requests from a table, and records them. Plain http:// is not handled
+    here, so a request for one would reach the network: the tests make sure none is made."""
+
+    handler_order = 100  # before urllib's own HTTPSHandler
+
+    def __init__(self, answers: dict[str, tuple[int, dict[str, str], bytes]]) -> None:
+        self.answers = answers
+        self.requested: list[str] = []
+
+    def https_open(self, req: urllib.request.Request) -> urllib.response.addinfourl:
+        self.requested.append(req.full_url)
+        status, headers, body = self.answers[req.full_url]
+        message = email.message.Message()
+        for name, value in headers.items():
+            message[name] = value
+        return FakeResponse(body, message, req.full_url, status)
+
+
+class FakeResponse(urllib.response.addinfourl):
+    """An answer with the reason phrase urllib's error processor reads."""
+
+    def __init__(self, body: bytes, headers: email.message.Message, url: str, code: int) -> None:
+        super().__init__(io.BytesIO(body), headers, url, code)
+        self.msg = "Found" if code == 302 else "OK"
+
+
+def use_fake_https(monkeypatch: pytest.MonkeyPatch, fake: FakeHttps, url: str) -> None:
+    monkeypatch.delenv("FLASHPI_OPENAPI_FILE", raising=False)
+    monkeypatch.setenv("FLASHPI_OPENAPI_URL", url)
+    build_opener = urllib.request.build_opener
+
+    def with_fake(*handlers: urllib.request.BaseHandler) -> urllib.request.OpenerDirector:
+        return build_opener(*handlers, fake)
+
+    monkeypatch.setattr(urllib.request, "build_opener", with_fake)
+
+
+def test_sync_refuses_a_redirect_to_plain_http_before_requesting_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    start = "https://docs.example/openapi.json"
+    fake = FakeHttps({start: (302, {"location": "http://docs.example/openapi.json"}, b"")})
+    use_fake_https(monkeypatch, fake, start)
+    with pytest.raises(SystemExit, match=r"redirect to a non-HTTPS URL: http://docs\.example"):
+        openapi.download()
+    assert fake.requested == [start]
+
+
+def test_sync_follows_a_redirect_to_another_https_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    start = "https://docs.example/openapi.json"
+    moved = "https://cdn.example/openapi.json"
+    fake = FakeHttps({start: (302, {"location": moved}, b""), moved: (200, {}, b'{"openapi":1}')})
+    use_fake_https(monkeypatch, fake, start)
+    assert openapi.download() == (start, '{"openapi":1}')
+    assert fake.requested == [start, moved]
+
+
+def test_the_redirect_handler_refuses_every_scheme_but_https() -> None:
+    handler = openapi.HttpsOnlyRedirects()
+    request = urllib.request.Request("https://docs.example/openapi.json")
+    headers = HTTPMessage()
+    for target in ("http://docs.example/x", "ftp://docs.example/x", "file:///etc/passwd"):
+        with pytest.raises(SystemExit, match="non-HTTPS"):
+            handler.redirect_request(request, io.BytesIO(), 302, "Found", headers, target)
+    followed = handler.redirect_request(
+        request, io.BytesIO(), 302, "Found", headers, "HTTPS://docs.example/y"
+    )
+    assert followed is not None
+    assert followed.full_url == "HTTPS://docs.example/y"
 
 
 # Faithfulness: every member of every schema has the type and the required flag of the document.
