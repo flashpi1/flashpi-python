@@ -232,6 +232,16 @@ class TestRequests:
         assert headers["x-extra"] == "yes"
         assert headers.get_list("authorization") == [f"Bearer {TEST_KEY}"]
 
+    async def test_refuses_header_values_that_are_not_text_before_sending(
+        self, make: MakeApi
+    ) -> None:
+        api = make(json_response({}))
+        with pytest.raises(TypeError, match="Header value must be str, not int"):
+            await api.call("status", extra_headers={"x-number": 1})
+        with pytest.raises(TypeError, match="Header value must be str, not bytes"):
+            await api.call("status", extra_headers={"x-raw": b"bytes"})
+        assert api.sent == []
+
     async def test_keeps_a_base_url_path_and_drops_its_trailing_slash(self, make: MakeApi) -> None:
         api = make(json_response({}), base_url="http://localhost:3000/proxy/")
         await api.call("status")

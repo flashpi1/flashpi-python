@@ -19,7 +19,7 @@ import httpx
 
 from ._errors import APIConnectionError, APIError, APITimeoutError, FlashpiError, api_error
 from ._response import APIResponse
-from ._validate import MAX_TIMEOUT, valid_retries, valid_timeout
+from ._validate import MAX_TIMEOUT, check_header_values, valid_retries, valid_timeout
 from ._version import VERSION
 from .types import Language
 
@@ -187,6 +187,7 @@ class Call:
 def prepare(config: ClientConfig, spec: RequestSpec[Any]) -> Call:
     """Checks the options and builds what the attempts share. Raises before anything is sent."""
     options = check_options(spec.options)
+    check_header_values(options.get("extra_headers"))
     max_retries = config.max_retries
     if options.get("max_retries") is not None:
         max_retries = valid_retries("max_retries", options.get("max_retries"))

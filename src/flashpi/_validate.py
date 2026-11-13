@@ -1,4 +1,7 @@
-"""Checks of the numeric settings, shared by the clients and every request."""
+"""Checks of the settings, shared by the clients and every request."""
+
+from collections.abc import Mapping
+from typing import cast
 
 from ._errors import FlashpiError
 
@@ -23,3 +26,13 @@ def valid_retries(name: str, value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise FlashpiError(f"{name} must be a whole number, 0 or more")
     return value
+
+
+def check_header_values(headers: object) -> None:
+    """Refuses header values that are not text with a TypeError, before httpx sees them: httpx
+    0.28 raises one for most values but 0.27 an AttributeError, and bytes fail later on both."""
+    if not isinstance(headers, Mapping):
+        return
+    for value in cast("Mapping[object, object]", headers).values():
+        if not isinstance(value, str):
+            raise TypeError(f"Header value must be str, not {type(value).__name__}")

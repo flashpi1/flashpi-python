@@ -9,7 +9,7 @@ import httpx
 
 from ._errors import FlashpiError
 from ._http import AsyncEngine, ClientConfig, SyncEngine
-from ._validate import valid_retries, valid_timeout
+from ._validate import check_header_values, valid_retries, valid_timeout
 from ._webhooks import Webhooks
 from .resources.documents import (
     AsyncCreditNotes,
@@ -51,6 +51,7 @@ def _configure(
 ) -> tuple[ClientConfig, Environment]:
     key, environment = _api_key(api_key)
     headers = dict(default_headers or {})
+    check_header_values(headers)
     if "idempotency-key" in httpx.Headers(headers):
         raise FlashpiError(
             "default_headers cannot carry an Idempotency-Key: it must be unique per operation. "
