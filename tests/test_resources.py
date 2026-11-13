@@ -1,13 +1,17 @@
 """Every resource method sends its operation (Node: test/resources.test.ts)."""
 
+import io
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from email.parser import BytesParser
+from email.policy import HTTP
+from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
 
-from flashpi import APIResponse, APITimeoutError, ConflictError
+from flashpi import APIResponse, APITimeoutError, ConflictError, FlashpiError
 from tests.conftest import MakeApi
 from tests.support import (
     ID,
@@ -88,6 +92,91 @@ CASES = [
     Case("documents.list", (), "GET", "/v1/documents", reply=empty_page),
     Case("documents.get", (DOCUMENT,), "GET", f"/v1/documents/{DOCUMENT}"),
     Case("documents.send_email", (DOCUMENT,), "POST", f"/v1/documents/{DOCUMENT}/email", body={}),
+    Case("issuers.create", ({"ruc": "1"},), "POST", "/v1/issuers", body={"ruc": "1"}),
+    Case("issuers.list", (), "GET", "/v1/issuers", reply=empty_page),
+    Case("issuers.get", (ISSUER,), "GET", f"/v1/issuers/{ISSUER}"),
+    Case(
+        "issuers.update",
+        (ISSUER, {"tradeName": "X"}),
+        "PATCH",
+        f"/v1/issuers/{ISSUER}",
+        body={"tradeName": "X"},
+    ),
+    Case("issuers.delete", (ISSUER,), "DELETE", f"/v1/issuers/{ISSUER}", reply=no_content),
+    Case(
+        "issuers.establishments.create",
+        (ISSUER, {"code": "002"}),
+        "POST",
+        f"/v1/issuers/{ISSUER}/establishments",
+        body={"code": "002"},
+    ),
+    Case(
+        "issuers.establishments.list",
+        (ISSUER,),
+        "GET",
+        f"/v1/issuers/{ISSUER}/establishments",
+        reply=empty_page,
+    ),
+    Case(
+        "issuers.establishments.get",
+        (ISSUER, ESTABLISHMENT),
+        "GET",
+        f"/v1/issuers/{ISSUER}/establishments/{ESTABLISHMENT}",
+    ),
+    Case(
+        "issuers.establishments.update",
+        (ISSUER, ESTABLISHMENT, {"address": "Quito"}),
+        "PATCH",
+        f"/v1/issuers/{ISSUER}/establishments/{ESTABLISHMENT}",
+        body={"address": "Quito"},
+    ),
+    Case(
+        "issuers.establishments.delete",
+        (ISSUER, ESTABLISHMENT),
+        "DELETE",
+        f"/v1/issuers/{ISSUER}/establishments/{ESTABLISHMENT}",
+        reply=no_content,
+    ),
+    Case(
+        "issuers.establishments.emission_points.create",
+        (ISSUER, ESTABLISHMENT, {"code": "002"}),
+        "POST",
+        f"/v1/issuers/{ISSUER}/establishments/{ESTABLISHMENT}/emission-points",
+        body={"code": "002"},
+    ),
+    Case(
+        "issuers.establishments.emission_points.list",
+        (ISSUER, ESTABLISHMENT),
+        "GET",
+        f"/v1/issuers/{ISSUER}/establishments/{ESTABLISHMENT}/emission-points",
+        reply=empty_page,
+    ),
+    Case(
+        "issuers.establishments.emission_points.get",
+        (ISSUER, ESTABLISHMENT, POINT),
+        "GET",
+        f"/v1/issuers/{ISSUER}/establishments/{ESTABLISHMENT}/emission-points/{POINT}",
+    ),
+    Case(
+        "issuers.establishments.emission_points.delete",
+        (ISSUER, ESTABLISHMENT, POINT),
+        "DELETE",
+        f"/v1/issuers/{ISSUER}/establishments/{ESTABLISHMENT}/emission-points/{POINT}",
+        reply=no_content,
+    ),
+    Case(
+        "issuers.certificates.list",
+        (ISSUER,),
+        "GET",
+        f"/v1/issuers/{ISSUER}/certificates",
+        reply=empty_page,
+    ),
+    Case(
+        "issuers.certificates.get",
+        (ISSUER, CERTIFICATE),
+        "GET",
+        f"/v1/issuers/{ISSUER}/certificates/{CERTIFICATE}",
+    ),
 ]
 
 
@@ -305,3 +394,175 @@ class TestDocuments:
         args = () if name == "list" else (DOCUMENT,)
         result = await api.op_with_response(f"documents.{name}", *args)
         assert result.request_id == "req_123"
+
+
+P12 = bytes([0x30, 0x82, 0x01, 0x02])
+"""The start of a .p12 (a DER sequence): enough for the SDK, which never parses it."""
+
+Part = tuple[str | None, str | None, str | None, bytes]
+
+
+def sent_form(request: httpx.Request) -> list[Part]:
+    """The parts of a multipart request: (name, file name, content type, content)."""
+    content_type = request.headers["content-type"]
+    assert content_type.startswith("multipart/form-data; boundary=")
+    head = f"Content-Type: {content_type}\r\n\r\n".encode()
+    message = BytesParser(policy=HTTP).parsebytes(head + request.content)
+    parts: list[Part] = []
+    for part in message.iter_parts():
+        payload = part.get_payload(decode=True)
+        assert isinstance(payload, bytes)
+        name = part.get_param("name", header="content-disposition")
+        parts.append(
+            (
+                name if isinstance(name, str) else None,
+                part.get_filename(),
+                part["content-type"],
+                payload,
+            )
+        )
+    return parts
+
+
+class TestCertificateUploads:
+    async def test_uploads_a_certificate_as_multipart_with_the_file_and_the_password(
+        self, make: MakeApi
+    ) -> None:
+        api = make(json_response({"id": CERTIFICATE, "status": "processing"}, 202))
+        certificate = await api.op(
+            "issuers.certificates.upload", ISSUER, {"file": P12, "password": "secret ñ"}
+        )
+        assert certificate["id"] == CERTIFICATE
+        request = api.sent[0]
+        assert request.method == "POST"
+        assert request.url.path == f"/v1/issuers/{ISSUER}/certificates"
+        assert "idempotency-key" in request.headers
+        assert sent_form(request) == [
+            ("password", None, None, "secret ñ".encode()),
+            ("file", "certificate.p12", "application/x-pkcs12", P12),
+        ]
+
+    @pytest.mark.parametrize(
+        "file",
+        [bytearray(P12), memoryview(P12), io.BytesIO(P12)],
+        ids=["bytearray", "memoryview", "binary file"],
+    )
+    async def test_takes_bytes_like_values_and_binary_files(
+        self, make: MakeApi, file: object
+    ) -> None:
+        if isinstance(file, io.BytesIO):
+            file.seek(0)
+        api = make(json_response({"id": CERTIFICATE}, 202))
+        upload = {"file": file, "password": "x", "filename": "firma.p12"}
+        await api.op("issuers.certificates.upload", ISSUER, upload)
+        assert sent_form(api.sent[0])[1] == ("file", "firma.p12", "application/x-pkcs12", P12)
+
+    async def test_reads_a_file_opened_from_disk(self, make: MakeApi, tmp_path: Path) -> None:
+        path = tmp_path / "firma.p12"
+        path.write_bytes(P12)
+        api = make(json_response({"id": CERTIFICATE}, 202))
+        with path.open("rb") as file:
+            await api.op("issuers.certificates.upload", ISSUER, {"file": file, "password": "x"})
+        assert sent_form(api.sent[0])[1][3] == P12
+
+    async def test_sends_the_same_file_again_on_a_retry(self, make: MakeApi) -> None:
+        api = make(problem(500, "internal_error"), json_response({"id": CERTIFICATE}, 202))
+        upload = {"file": io.BytesIO(P12), "password": "x"}
+        await api.op("issuers.certificates.upload", ISSUER, upload)
+        assert len(api.sent) == 2
+        assert api.sent[0].headers["idempotency-key"] == api.sent[1].headers["idempotency-key"]
+        assert [sent_form(request)[1][3] for request in api.sent] == [P12, P12]
+
+    async def test_accepts_a_file_of_exactly_1_mib(self, make: MakeApi) -> None:
+        api = make(json_response({"id": CERTIFICATE}, 202))
+        upload = {"file": bytes(1_048_576), "password": "x"}
+        await api.op("issuers.certificates.upload", ISSUER, upload)
+        assert len(sent_form(api.sent[0])[1][3]) == 1_048_576
+
+    @pytest.mark.parametrize(
+        ("upload", "error", "message"),
+        [
+            ({"file": b"", "password": "x"}, FlashpiError, "empty"),
+            ({"file": io.BytesIO(), "password": "x"}, FlashpiError, "empty"),
+            ({"file": bytes(1_048_577), "password": "x"}, FlashpiError, "1048577 bytes.*1048576"),
+            ({"file": P12}, FlashpiError, "password must be a string"),
+            ({"file": P12, "password": None}, FlashpiError, "password must be a string"),
+            ({"file": P12, "password": b"x"}, FlashpiError, "password must be a string"),
+            ({"password": "x"}, TypeError, "got NoneType"),
+            ({"file": "firma.p12", "password": "x"}, TypeError, "binary mode"),
+            ({"file": io.StringIO("x"), "password": "x"}, TypeError, "got StringIO"),
+            ({"file": P12, "password": "x", "filename": 1}, TypeError, "filename"),
+            (P12, TypeError, "must be a dict"),
+        ],
+    )
+    async def test_refuses_a_bad_upload_before_sending(
+        self, make: MakeApi, upload: object, error: type[Exception], message: str
+    ) -> None:
+        api = make()
+        with pytest.raises(error, match=message):
+            await api.op("issuers.certificates.upload", ISSUER, upload)
+        assert api.sent == []
+
+
+EMPTY: dict[str, Any] = {}
+
+ISSUER_CALLS: list[tuple[str, tuple[Any, ...], Callable[[], httpx.Response]]] = [
+    ("issuers.create", (EMPTY,), empty_object),
+    ("issuers.list", (), empty_page),
+    ("issuers.get", (ISSUER,), empty_object),
+    ("issuers.update", (ISSUER, EMPTY), empty_object),
+    ("issuers.delete", (ISSUER,), no_content),
+    ("issuers.establishments.create", (ISSUER, EMPTY), empty_object),
+    ("issuers.establishments.list", (ISSUER,), empty_page),
+    ("issuers.establishments.get", (ISSUER, ESTABLISHMENT), empty_object),
+    ("issuers.establishments.update", (ISSUER, ESTABLISHMENT, EMPTY), empty_object),
+    ("issuers.establishments.delete", (ISSUER, ESTABLISHMENT), no_content),
+    (
+        "issuers.establishments.emission_points.create",
+        (ISSUER, ESTABLISHMENT, EMPTY),
+        empty_object,
+    ),
+    ("issuers.establishments.emission_points.list", (ISSUER, ESTABLISHMENT), empty_page),
+    (
+        "issuers.establishments.emission_points.get",
+        (ISSUER, ESTABLISHMENT, POINT),
+        empty_object,
+    ),
+    (
+        "issuers.establishments.emission_points.delete",
+        (ISSUER, ESTABLISHMENT, POINT),
+        no_content,
+    ),
+    ("issuers.certificates.upload", (ISSUER, {"file": P12, "password": "x"}), empty_object),
+    ("issuers.certificates.list", (ISSUER,), empty_page),
+    ("issuers.certificates.get", (ISSUER, CERTIFICATE), empty_object),
+]
+
+
+class TestIssuers:
+    @pytest.mark.parametrize(
+        ("name", "args"),
+        [
+            ("issuers.list", ()),
+            ("issuers.establishments.list", (ISSUER,)),
+            ("issuers.establishments.emission_points.list", (ISSUER, ESTABLISHMENT)),
+            ("issuers.certificates.list", (ISSUER,)),
+        ],
+    )
+    async def test_lists_with_paging(self, make: MakeApi, name: str, args: tuple[str, ...]) -> None:
+        api = make(page([{"id": "a"}], "next"), page([{"id": "b"}]))
+        first = await api.op(name, *args, {"limit": 1})
+        assert [item["id"] for item in await api.iterate(first)] == ["a", "b"]
+        assert [dict(request.url.params) for request in api.sent] == [
+            {"limit": "1"},
+            {"limit": "1", "cursor": "next"},
+        ]
+
+    @pytest.mark.parametrize(("name", "args", "reply"), ISSUER_CALLS)
+    async def test_returns_the_response_with_with_response(
+        self, make: MakeApi, name: str, args: tuple[Any, ...], reply: Callable[[], httpx.Response]
+    ) -> None:
+        api = make(reply())
+        result = await api.op_with_response(name, *args)
+        assert isinstance(result, APIResponse)
+        assert result.response.request.url.path == api.sent[0].url.path

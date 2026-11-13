@@ -23,25 +23,43 @@ from .documents import (
     Withholdings,
 )
 from .events import AsyncEvents, Events
+from .issuers import (
+    AsyncCertificates,
+    AsyncEmissionPoints,
+    AsyncEstablishments,
+    AsyncIssuers,
+    Certificates,
+    EmissionPoints,
+    Establishments,
+    Issuers,
+)
 from .status import AsyncStatusResource, StatusResource
 
 __all__ = [
+    "AsyncCertificates",
     "AsyncCreditNotes",
     "AsyncDebitNotes",
     "AsyncDocumentIssuer",
     "AsyncDocuments",
+    "AsyncEmissionPoints",
+    "AsyncEstablishments",
     "AsyncEvents",
     "AsyncInvoices",
+    "AsyncIssuers",
     "AsyncPurchaseSettlements",
     "AsyncStatusResource",
     "AsyncWaybills",
     "AsyncWithholdings",
+    "Certificates",
     "CreditNotes",
     "DebitNotes",
     "DocumentIssuer",
     "Documents",
+    "EmissionPoints",
+    "Establishments",
     "Events",
     "Invoices",
+    "Issuers",
     "PurchaseSettlements",
     "StatusResource",
     "Waybills",

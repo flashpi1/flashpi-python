@@ -28,6 +28,7 @@ from .resources.documents import (
     Withholdings,
 )
 from .resources.events import AsyncEvents, Events
+from .resources.issuers import AsyncIssuers, Issuers
 from .resources.status import AsyncStatusResource, StatusResource
 from .types import Environment, Language
 
@@ -143,6 +144,9 @@ class Flashpi:
     documents: Documents
     """Every issued document: search, XML, RIDE (PDF) and email."""
 
+    issuers: Issuers
+    """Issuers (RUCs) with their establishments, emission points and certificates."""
+
     events: Events
     """Events of documents, certificates and email sending."""
 
@@ -202,6 +206,7 @@ class Flashpi:
         self.waybills = Waybills(self._engine)
         self.withholdings = Withholdings(self._engine)
         self.documents = Documents(self._engine)
+        self.issuers = Issuers(self._engine)
         self.events = Events(self._engine)
         self.status = StatusResource(self._engine)
         self.webhooks = Webhooks()
@@ -264,6 +269,9 @@ class AsyncFlashpi:
     documents: AsyncDocuments
     """Every issued document: search, XML, RIDE (PDF) and email."""
 
+    issuers: AsyncIssuers
+    """Issuers (RUCs) with their establishments, emission points and certificates."""
+
     events: AsyncEvents
     """Events of documents, certificates and email sending."""
 
@@ -310,6 +318,7 @@ class AsyncFlashpi:
         self.waybills = AsyncWaybills(self._engine)
         self.withholdings = AsyncWithholdings(self._engine)
         self.documents = AsyncDocuments(self._engine)
+        self.issuers = AsyncIssuers(self._engine)
         self.events = AsyncEvents(self._engine)
         self.status = AsyncStatusResource(self._engine)
         self.webhooks = Webhooks()
