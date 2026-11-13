@@ -11,6 +11,22 @@ from ._errors import FlashpiError
 from ._http import AsyncEngine, ClientConfig, SyncEngine
 from ._validate import valid_retries, valid_timeout
 from ._webhooks import Webhooks
+from .resources.documents import (
+    AsyncCreditNotes,
+    AsyncDebitNotes,
+    AsyncDocuments,
+    AsyncInvoices,
+    AsyncPurchaseSettlements,
+    AsyncWaybills,
+    AsyncWithholdings,
+    CreditNotes,
+    DebitNotes,
+    Documents,
+    Invoices,
+    PurchaseSettlements,
+    Waybills,
+    Withholdings,
+)
 from .resources.events import AsyncEvents, Events
 from .resources.status import AsyncStatusResource, StatusResource
 from .types import Environment, Language
@@ -106,6 +122,27 @@ class Flashpi:
     environment: Environment
     """`test` for fp_test_ keys (SRI pruebas), `live` for fp_live_ keys (SRI production)."""
 
+    invoices: Invoices
+    """Invoices (facturas)."""
+
+    credit_notes: CreditNotes
+    """Credit notes (notas de crédito)."""
+
+    debit_notes: DebitNotes
+    """Debit notes (notas de débito)."""
+
+    purchase_settlements: PurchaseSettlements
+    """Purchase settlements (liquidaciones de compra)."""
+
+    waybills: Waybills
+    """Waybills (guías de remisión)."""
+
+    withholdings: Withholdings
+    """Withholding receipts (comprobantes de retención)."""
+
+    documents: Documents
+    """Every issued document: search, XML, RIDE (PDF) and email."""
+
     events: Events
     """Events of documents, certificates and email sending."""
 
@@ -158,6 +195,13 @@ class Flashpi:
         self._owns_http_client = http_client is None
         self._http_client = http_client or httpx.Client(follow_redirects=False)
         self._engine = SyncEngine(config, self._http_client)
+        self.invoices = Invoices(self._engine)
+        self.credit_notes = CreditNotes(self._engine)
+        self.debit_notes = DebitNotes(self._engine)
+        self.purchase_settlements = PurchaseSettlements(self._engine)
+        self.waybills = Waybills(self._engine)
+        self.withholdings = Withholdings(self._engine)
+        self.documents = Documents(self._engine)
         self.events = Events(self._engine)
         self.status = StatusResource(self._engine)
         self.webhooks = Webhooks()
@@ -199,6 +243,27 @@ class AsyncFlashpi:
     environment: Environment
     """`test` for fp_test_ keys (SRI pruebas), `live` for fp_live_ keys (SRI production)."""
 
+    invoices: AsyncInvoices
+    """Invoices (facturas)."""
+
+    credit_notes: AsyncCreditNotes
+    """Credit notes (notas de crédito)."""
+
+    debit_notes: AsyncDebitNotes
+    """Debit notes (notas de débito)."""
+
+    purchase_settlements: AsyncPurchaseSettlements
+    """Purchase settlements (liquidaciones de compra)."""
+
+    waybills: AsyncWaybills
+    """Waybills (guías de remisión)."""
+
+    withholdings: AsyncWithholdings
+    """Withholding receipts (comprobantes de retención)."""
+
+    documents: AsyncDocuments
+    """Every issued document: search, XML, RIDE (PDF) and email."""
+
     events: AsyncEvents
     """Events of documents, certificates and email sending."""
 
@@ -238,6 +303,13 @@ class AsyncFlashpi:
         self._owns_http_client = http_client is None
         self._http_client = http_client or httpx.AsyncClient(follow_redirects=False)
         self._engine = AsyncEngine(config, self._http_client)
+        self.invoices = AsyncInvoices(self._engine)
+        self.credit_notes = AsyncCreditNotes(self._engine)
+        self.debit_notes = AsyncDebitNotes(self._engine)
+        self.purchase_settlements = AsyncPurchaseSettlements(self._engine)
+        self.waybills = AsyncWaybills(self._engine)
+        self.withholdings = AsyncWithholdings(self._engine)
+        self.documents = AsyncDocuments(self._engine)
         self.events = AsyncEvents(self._engine)
         self.status = AsyncStatusResource(self._engine)
         self.webhooks = Webhooks()
