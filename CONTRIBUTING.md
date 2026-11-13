@@ -96,8 +96,11 @@ repository secret `FLASHPI_BOT_PRIVATE_KEY`. The workflows create a one-hour tok
 only the permissions each job needs. To rotate the key, generate a new one in the app's settings,
 update the secret, then delete the old key.
 
-The publish job runs in the `pypi` environment, which waits for a maintainer's approval in
-GitHub before it publishes.
+The release builds in two jobs. The build job checks out the tag, builds the sdist and the wheel
+with no cache and checks them (`scripts/package_check.py`), with a read-only token and no secret.
+The publish job, the only one allowed to get a PyPI token, checks out nothing and runs no code:
+it downloads those files and uploads them. It runs in the `pypi` environment, which waits for a
+maintainer's approval in GitHub before it publishes.
 
 ### PyPI trusted publishing
 
@@ -113,9 +116,9 @@ version, 0.1.0 included, is published by the workflow. Before the first release 
    reviewers, limited to the `main` branch.
 3. Drop the not-on-PyPI notice from both READMEs in its own pull request (PyPI shows `README.md`
    as the project's page).
-4. Merge the release PR. release-please tags `v0.1.0`; approve the `pypi` environment, and the
-   publish job builds the tag and uploads the sdist and the wheel. The first upload creates the
-   project, and the pending publisher becomes its trusted publisher.
+4. Merge the release PR. release-please tags `v0.1.0` and the build job builds and checks the
+   tag; approve the `pypi` environment, and the publish job uploads the sdist and the wheel. The
+   first upload creates the project, and the pending publisher becomes its trusted publisher.
 
 From then on, versions are published by the workflow only: do not create PyPI API tokens for
 the project.
