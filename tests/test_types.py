@@ -19,6 +19,7 @@ from flashpi.types import (
     Event,
     EventType,
     FieldError,
+    FieldErrorCode,
     Problem,
     ThinWebhookEvent,
     WebhookEndpointVerificationEventData,
@@ -52,6 +53,10 @@ def test_environments_and_list_params() -> None:
     assert get_args(Environment) == ("test", "live")
     params: DocumentListParams = {"status": "authorized", "issueDateFrom": "2026-11-01"}
     assert params["status"] == "authorized"
+
+
+def test_field_error_codes_include_zero_payment() -> None:
+    assert "zero_payment" in get_args(FieldErrorCode)
 
 
 def test_every_public_name_is_exported() -> None:
