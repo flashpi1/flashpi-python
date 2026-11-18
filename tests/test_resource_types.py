@@ -15,7 +15,9 @@ from flashpi.types import (
     CompletedIssuerOnboarding,
     CreateCreditNote,
     CreateInvoice,
+    CreateWithholding,
     Document,
+    DocumentPayment,
     DocumentXml,
     EmissionPoint,
     Event,
@@ -24,6 +26,7 @@ from flashpi.types import (
     Status,
     WebhookDeliveryDetail,
     WebhookEndpointSecret,
+    WithholdingPayment,
 )
 
 
@@ -81,3 +84,17 @@ async def runs_with_response_calls_as_tasks(flashpi: AsyncFlashpi, invoice: Crea
     async with asyncio.TaskGroup() as group:
         grouped = group.create_task(flashpi.invoices.with_response.create(invoice))
         assert_type(grouped, asyncio.Task[APIResponse[Document]])
+
+
+def leaves_out_the_last_payments_amount(
+    invoice: CreateInvoice, withholding: CreateWithholding
+) -> None:
+    invoice["payments"] = [{"method": "credit_card", "amount": "10.00"}, {"method": "cash"}]
+    withholding["supportingDocuments"][0]["payments"] = [{"method": "other_financial_system"}]
+    payment: DocumentPayment = {"method": "cash"}
+    withheld: WithholdingPayment = {"method": "cash"}
+    assert_type(payment.get("amount"), str | None)
+    assert_type(withheld.get("amount"), str | None)
+
+    payment["amount"] = 10.35  # pyright: ignore[reportGeneralTypeIssues]
+    withheld = {"amount": "1.00"}  # pyright: ignore[reportAssignmentType]

@@ -72,6 +72,10 @@ Las peticiones y las respuestas son diccionarios con las claves de la API, en ca
 (`from flashpi.types import CreateInvoice, Document`). Los montos y cantidades son **textos**
 (`"1.15"`), nunca números, para no perder decimales.
 
+El último pago puede ir sin `amount`: Flashpi le pone lo que los demás pagos dejan del total, así
+que aquí `"payments": [{"method": "cash"}]` paga los 1.15. Con varios pagos, ninguno puede ser 0
+(`zero_payment`). Más en las [reglas](https://flashpi.com.ec/docs/documents/#totales).
+
 Con el **emisor demo** puedes emitir en pruebas sin subir un certificado: su id está en el
 Resumen de la consola (hasta 50 comprobantes al día). Más en
 [Sandbox y emisor demo](https://flashpi.com.ec/docs/sandbox/).

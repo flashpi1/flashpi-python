@@ -575,7 +575,8 @@ DocumentPaymentTermUnit: TypeAlias = Literal["days", "months"]
 
 
 class DocumentPayment(TypedDict):
-    """A payment. The payments must add up to the document total."""
+    """A payment. The payments must add up to the document total; the last one may leave out
+    `amount` to take the rest of the total."""
 
     method: DocumentPaymentMethod
     """Payment method: `cash` (without the financial system), `debt_offset`, `debit_card`,
@@ -583,8 +584,10 @@ class DocumentPayment(TypedDict):
     transfers, checks and other payments through the financial system) or
     `securities_endorsement`."""
 
-    amount: str
-    """Amount paid with this method."""
+    amount: NotRequired[str]
+    """Amount paid with this method. Only the last payment may leave it out: Flashpi gives it
+    what the other payments leave of the total (the whole total when it is the only one). With
+    several payments none can be zero (`zero_payment`), the computed one included."""
 
     term: NotRequired[str]
     """Payment term in `termUnit` units. Required on purchase settlements."""
@@ -1107,8 +1110,9 @@ class WithholdingPayment(TypedDict):
     method: WithholdingPaymentMethod
     """Payment method (same values as `DocumentPayment.method`)."""
 
-    amount: str
-    """Amount."""
+    amount: NotRequired[str]
+    """Amount. Only the last payment may leave it out: it takes what the other payments leave of
+    the supporting document `total`. With several payments none can be zero (`zero_payment`)."""
 
 
 class SupportingDocument(TypedDict):
@@ -1911,6 +1915,7 @@ FieldErrorCode: TypeAlias = Literal[
     "too_many_additional_fields",
     "reserved_name",
     "amount_mismatch",
+    "zero_payment",
     "future_date",
     "date_too_early",
     "date_too_late",
@@ -2313,7 +2318,8 @@ StatusStatus: TypeAlias = Literal["operational"]
 
 
 class Status(TypedDict):
-    """Public status of Flashpi. Placeholder until the status monitors exist."""
+    """Public status of the Flashpi API. Components and SRI notices are on the status page,
+    https://flashpi.com.ec/status."""
 
     status: StatusStatus
     """Overall status of Flashpi."""

@@ -15,6 +15,7 @@ import httpx
 import pytest
 
 from flashpi import APIResponse, APITimeoutError, ConflictError, FlashpiError
+from flashpi.types import CreateInvoice
 from tests.conftest import MakeApi
 from tests.support import (
     ID,
@@ -391,6 +392,31 @@ class TestIssuingDocuments:
         with pytest.raises(APITimeoutError, match="timed out after 5 seconds"):
             await api.op("invoices.create", {"options": {"waitTimeoutSeconds": 30}})
         assert read_timeout(api.sent[0]) == 5
+
+    async def test_sends_a_last_payment_without_amount_for_flashpi_to_fill(
+        self, make: MakeApi
+    ) -> None:
+        api = make(json_response(document_body(), 202))
+        body: CreateInvoice = {
+            "issuerId": ISSUER,
+            "establishment": "001",
+            "emissionPoint": "001",
+            "customer": {"idType": "final_consumer"},
+            "items": [
+                {
+                    "code": "P-001",
+                    "description": "Test service",
+                    "quantity": "1",
+                    "unitPrice": "10.00",
+                    "taxes": [{"type": "vat", "rate": "15"}],
+                }
+            ],
+            "payments": [{"method": "credit_card", "amount": "10.00"}, {"method": "cash"}],
+        }
+        await api.op("invoices.create", body)
+        payments = sent_json(api.sent[0])["payments"]
+        assert payments == [{"method": "credit_card", "amount": "10.00"}, {"method": "cash"}]
+        assert "amount" not in payments[1]
 
     async def test_sends_a_body_that_is_not_a_dict_as_it_is(self, make: MakeApi) -> None:
         api = make(json_response({}, 202))
