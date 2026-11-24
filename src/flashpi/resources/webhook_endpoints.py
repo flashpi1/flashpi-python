@@ -156,7 +156,9 @@ class WebhookEndpoints(SyncAPIResource):
         self, body: CreateWebhookEndpoint, **options: Unpack[RequestOptions]
     ) -> WebhookEndpoint:
         """Creates an endpoint. It stays `pending_verification` until it answers the activation
-        challenge; read its secret with `get_secret()` first, then call `verify()` if needed."""
+        challenge; read its secret with `get_secret()` first, then call `verify()` if needed. An
+        account may have a limited number of endpoints per mode (ConflictError
+        `webhook_endpoint_limit_reached`, with the `limit`)."""
         return self._request(create_endpoint(body, options))
 
     def list(
@@ -173,7 +175,8 @@ class WebhookEndpoints(SyncAPIResource):
         self, endpoint_id: str, body: UpdateWebhookEndpoint, **options: Unpack[RequestOptions]
     ) -> WebhookEndpoint:
         """Updates the URL, events, payload mode, description or `disabled` (only the fields
-        sent)."""
+        sent). A new URL, or enabling the endpoint again, starts a verification, which counts
+        toward its hourly limit (RateLimitError `rate_limited`, with `retry_after`)."""
         return self._request(update_endpoint(endpoint_id, body, options))
 
     def delete(self, endpoint_id: str, **options: Unpack[RequestOptions]) -> None:
@@ -200,7 +203,8 @@ class WebhookEndpoints(SyncAPIResource):
 
     def verify(self, endpoint_id: str, **options: Unpack[RequestOptions]) -> WebhookEndpoint:
         """Sends the activation challenge (`webhook_endpoint.verification`) to the endpoint
-        again."""
+        again. An endpoint may start a limited number of verifications an hour (RateLimitError
+        `rate_limited`, with `retry_after`)."""
         return self._request(verify_endpoint(endpoint_id, options))
 
     @cached_property
@@ -276,7 +280,9 @@ class AsyncWebhookEndpoints(AsyncAPIResource):
         self, body: CreateWebhookEndpoint, **options: Unpack[RequestOptions]
     ) -> WebhookEndpoint:
         """Creates an endpoint. It stays `pending_verification` until it answers the activation
-        challenge; read its secret with `get_secret()` first, then call `verify()` if needed."""
+        challenge; read its secret with `get_secret()` first, then call `verify()` if needed. An
+        account may have a limited number of endpoints per mode (ConflictError
+        `webhook_endpoint_limit_reached`, with the `limit`)."""
         return await self._request(create_endpoint(body, options))
 
     def list(
@@ -293,7 +299,8 @@ class AsyncWebhookEndpoints(AsyncAPIResource):
         self, endpoint_id: str, body: UpdateWebhookEndpoint, **options: Unpack[RequestOptions]
     ) -> WebhookEndpoint:
         """Updates the URL, events, payload mode, description or `disabled` (only the fields
-        sent)."""
+        sent). A new URL, or enabling the endpoint again, starts a verification, which counts
+        toward its hourly limit (RateLimitError `rate_limited`, with `retry_after`)."""
         return await self._request(update_endpoint(endpoint_id, body, options))
 
     async def delete(self, endpoint_id: str, **options: Unpack[RequestOptions]) -> None:
@@ -320,7 +327,8 @@ class AsyncWebhookEndpoints(AsyncAPIResource):
 
     async def verify(self, endpoint_id: str, **options: Unpack[RequestOptions]) -> WebhookEndpoint:
         """Sends the activation challenge (`webhook_endpoint.verification`) to the endpoint
-        again."""
+        again. An endpoint may start a limited number of verifications an hour (RateLimitError
+        `rate_limited`, with `retry_after`)."""
         return await self._request(verify_endpoint(endpoint_id, options))
 
     @cached_property

@@ -289,7 +289,8 @@ class Certificates(SyncAPIResource):
         Flashpi checks it in the background: the certificate starts `processing`, then becomes
         `accepted` (event `certificate.verified`, or `certificate.pending` while its revocation
         status cannot be checked) or `rejected` (no event: follow it with `get()` and read
-        `rejection`).
+        `rejection`). An accepted certificate may carry `warnings`, such as `ruc_mismatch`: a
+        test certificate that is not for the issuer's RUC signs test documents only.
         """
         try:
             form = certificate_form(upload)
@@ -512,7 +513,8 @@ class AsyncCertificates(AsyncAPIResource):
         Flashpi checks it in the background: the certificate starts `processing`, then becomes
         `accepted` (event `certificate.verified`, or `certificate.pending` while its revocation
         status cannot be checked) or `rejected` (no event: follow it with `get()` and read
-        `rejection`).
+        `rejection`). An accepted certificate may carry `warnings`, such as `ruc_mismatch`: a
+        test certificate that is not for the issuer's RUC signs test documents only.
         """
         try:
             form = certificate_form(upload)
