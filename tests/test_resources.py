@@ -14,7 +14,14 @@ from typing import Any
 import httpx
 import pytest
 
-from flashpi import APIResponse, APITimeoutError, ConflictError, FlashpiError
+from flashpi import (
+    APIResponse,
+    APITimeoutError,
+    ConflictError,
+    FlashpiError,
+    PermissionDeniedError,
+    RateLimitError,
+)
 from flashpi.types import CreateInvoice
 from tests.conftest import MakeApi
 from tests.support import (
@@ -844,6 +851,29 @@ class TestIssuers:
         assert isinstance(result, APIResponse)
         assert result.response.request.url.path == api.sent[0].url.path
 
+    async def test_reads_the_warnings_of_an_accepted_certificate(self, make: MakeApi) -> None:
+        warning = {"code": "ruc_mismatch", "message": "Not for the issuer's RUC"}
+        api = make(json_response({"id": CERTIFICATE, "status": "accepted", "warnings": [warning]}))
+        certificate = await api.op("issuers.certificates.get", ISSUER, CERTIFICATE)
+        assert certificate["warnings"] == [warning]
+
+    @pytest.mark.parametrize(
+        ("name", "args"),
+        [
+            ("issuers.update", (ISSUER, EMPTY)),
+            ("issuers.establishments.create", (ISSUER, EMPTY)),
+            ("issuers.certificates.upload", (ISSUER, {"file": P12, "password": "x"})),
+        ],
+    )
+    async def test_raises_live_key_required_as_a_permission_error(
+        self, make: MakeApi, name: str, args: tuple[Any, ...]
+    ) -> None:
+        api = make(problem(403, "live_key_required"))
+        with pytest.raises(PermissionDeniedError) as caught:
+            await api.op(name, *args)
+        assert caught.value.code == "live_key_required"
+        assert len(api.sent) == 1
+
 
 class TestIssuerOnboardings:
     async def test_starts_an_onboarding_with_a_binary_file_and_a_file_name(
@@ -911,6 +941,34 @@ class TestWebhookEndpoints:
         assert [delivery["id"] for delivery in await api.iterate(first)] == ["del_1", "del_2"]
         assert dict(api.sent[1].url.params) == {**params, "cursor": "c1"}
         assert api.sent[1].url.path == f"/v1/webhook-endpoints/{ENDPOINT}/deliveries"
+
+    async def test_raises_the_endpoint_limit_as_a_conflict_error_with_the_limit(
+        self, make: MakeApi
+    ) -> None:
+        api = make(problem(409, "webhook_endpoint_limit_reached", {"limit": 20}))
+        with pytest.raises(ConflictError) as caught:
+            await api.op("webhook_endpoints.create", {"url": "https://example.com/hooks"})
+        assert caught.value.code == "webhook_endpoint_limit_reached"
+        assert caught.value.problem is not None
+        assert caught.value.problem.get("limit") == 20
+        assert len(api.sent) == 1
+
+    @pytest.mark.parametrize(
+        ("name", "args"),
+        [
+            ("webhook_endpoints.update", (ENDPOINT, {"url": "https://example.com/new"})),
+            ("webhook_endpoints.verify", (ENDPOINT,)),
+        ],
+    )
+    async def test_raises_the_hourly_verification_limit_without_waiting_for_it(
+        self, make: MakeApi, clock: Clock, name: str, args: tuple[Any, ...]
+    ) -> None:
+        api = make(problem(429, "rate_limited", headers={"retry-after": "3600"}))
+        with pytest.raises(RateLimitError) as caught:
+            await api.op(name, *args)
+        assert (caught.value.code, caught.value.retry_after) == ("rate_limited", 3600)
+        assert len(api.sent) == 1
+        assert clock.elapsed == 0
 
     @pytest.mark.parametrize(("name", "args", "reply"), WEBHOOK_CALLS)
     async def test_returns_the_response_with_with_response(
