@@ -178,17 +178,17 @@ except APIError as error:
     raise
 ```
 
-| Clase                      | Estado | Ejemplos de `code`                                          |
-| -------------------------- | ------ | ----------------------------------------------------------- |
-| `BadRequestError`          | 400    | `malformed_json`, `invalid_idempotency_key`                 |
-| `AuthenticationError`      | 401    | `authentication_required`, `invalid_api_key`                |
-| `PermissionDeniedError`    | 403    | `key_read_only`, `key_scope_mismatch`, `ip_not_allowed`     |
-| `NotFoundError`            | 404    | `not_found`                                                 |
-| `ConflictError`            | 409    | `sequential_already_used`, `ride_not_available`             |
-| `UnprocessableEntityError` | 422    | `validation_failed`, `total_mismatch`                       |
-| `RateLimitError`           | 429    | `demo_issuer_quota_exceeded`, `account_email_limit_reached` |
-| `InternalServerError`      | 5xx    | `internal_error`                                            |
-| `APIConnectionError`       | —      | sin respuesta (red); `APITimeoutError` si se agotó el plazo |
+| Clase                      | Estado | Ejemplos de `code`                                                                |
+| -------------------------- | ------ | --------------------------------------------------------------------------------- |
+| `BadRequestError`          | 400    | `malformed_json`, `invalid_idempotency_key`                                       |
+| `AuthenticationError`      | 401    | `authentication_required`, `invalid_api_key`                                      |
+| `PermissionDeniedError`    | 403    | `key_read_only`, `key_scope_mismatch`, `ip_not_allowed`, `live_key_required`      |
+| `NotFoundError`            | 404    | `not_found`                                                                       |
+| `ConflictError`            | 409    | `sequential_already_used`, `ride_not_available`, `webhook_endpoint_limit_reached` |
+| `UnprocessableEntityError` | 422    | `validation_failed`, `total_mismatch`                                             |
+| `RateLimitError`           | 429    | `demo_issuer_quota_exceeded`, `account_email_limit_reached`                       |
+| `InternalServerError`      | 5xx    | `internal_error`                                                                  |
+| `APIConnectionError`       | —      | sin respuesta (red); `APITimeoutError` si se agotó el plazo                       |
 
 Todas derivan de `FlashpiError`. Algunos errores traen datos extra en `error.problem`, por
 ejemplo `documentId`, `limit`, `resetsAt` o `rideStatus`. Para recibir los mensajes en español:
