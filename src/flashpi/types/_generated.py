@@ -126,6 +126,23 @@ class CertificateRevocation(TypedDict):
 CertificateStatus: TypeAlias = Literal["processing", "accepted", "rejected"]
 
 
+CertificateWarningCode: TypeAlias = Literal["ruc_mismatch"]
+"""`ruc_mismatch`: a test certificate that is not for the issuer's RUC. It signs test documents
+only and does not count for live API keys; in live mode such a certificate is rejected
+(`rejection.code` `ruc_mismatch`)."""
+
+
+class CertificateWarning(TypedDict):
+    """Something to fix about an accepted certificate that does not stop it signing."""
+
+    code: CertificateWarningCode
+    """`ruc_mismatch`: a test certificate that is not for the issuer's RUC. It signs test
+    documents only and does not count for live API keys; in live mode such a certificate is
+    rejected (`rejection.code` `ruc_mismatch`)."""
+
+    message: str
+
+
 class Certificate(TypedDict):
     """An issuer's .p12 signing certificate. Flashpi checks the upload asynchronously
     (`processing`, then `accepted` or `rejected`); the file and its password are never
@@ -173,6 +190,10 @@ class Certificate(TypedDict):
     revocation: CertificateRevocation | None
 
     rejection: CertificateRejection | None
+
+    warnings: list[CertificateWarning]
+    """Warnings about an accepted certificate (empty when there are none). A test certificate
+    that is not for the issuer's RUC is accepted with `ruc_mismatch`."""
 
     createdAt: str
     """Format: date-time."""
@@ -404,7 +425,8 @@ class DocumentItem(TypedDict):
     """A second code, for example the barcode."""
 
     description: str
-    """Description."""
+    """Description. With the shared demo issuer at most 291 characters (422
+    demo_issuer_description_too_long): Flashpi starts it with "PRUEBA - "."""
 
     unit: NotRequired[str]
     """Unit of measure (invoices and purchase settlements)."""
@@ -422,7 +444,8 @@ class DocumentItem(TypedDict):
     """The taxes of the line."""
 
     additionalDetails: NotRequired[dict[str, str]]
-    """Up to 3 extra details printed with the line (name → value, 1 to 300 characters)."""
+    """Up to 3 extra details printed with the line (name → value, 1 to 300 characters). Not
+    accepted with the shared demo issuer (422 demo_issuer_free_text_not_allowed)."""
 
 
 class DocumentOptions(TypedDict):
@@ -520,7 +543,9 @@ class CreateCreditNote(TypedDict):
     additionalInfo: NotRequired[dict[str, str]]
     """Additional information printed on the document (name → value, 1 to 300 characters each). A
     document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and
-    Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours."""
+    Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours. Not accepted with
+    the shared demo issuer (422 demo_issuer_free_text_not_allowed), whose documents carry only
+    the legend "Aviso: DOCUMENTO DE PRUEBA SIN VALIDEZ TRIBUTARIA - SANDBOX FLASHPI"."""
 
     options: NotRequired[DocumentOptions]
     """Delivery options."""
@@ -546,7 +571,8 @@ class DebitNoteReason(TypedDict):
     """A reason for a debit note and its amount before taxes."""
 
     description: str
-    """Reason."""
+    """Reason. With the shared demo issuer at most 291 characters (422
+    demo_issuer_description_too_long): Flashpi starts it with "PRUEBA - "."""
 
     amount: str
     """Amount before taxes."""
@@ -620,7 +646,9 @@ class CreateDebitNote(TypedDict):
     additionalInfo: NotRequired[dict[str, str]]
     """Additional information printed on the document (name → value, 1 to 300 characters each). A
     document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and
-    Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours."""
+    Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours. Not accepted with
+    the shared demo issuer (422 demo_issuer_free_text_not_allowed), whose documents carry only
+    the legend "Aviso: DOCUMENTO DE PRUEBA SIN VALIDEZ TRIBUTARIA - SANDBOX FLASHPI"."""
 
     options: NotRequired[DocumentOptions]
     """Delivery options."""
@@ -680,7 +708,9 @@ class CreateInvoice(TypedDict):
     additionalInfo: NotRequired[dict[str, str]]
     """Additional information printed on the document (name → value, 1 to 300 characters each). A
     document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and
-    Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours."""
+    Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours. Not accepted with
+    the shared demo issuer (422 demo_issuer_free_text_not_allowed), whose documents carry only
+    the legend "Aviso: DOCUMENTO DE PRUEBA SIN VALIDEZ TRIBUTARIA - SANDBOX FLASHPI"."""
 
     options: NotRequired[DocumentOptions]
     """Delivery options."""
@@ -754,7 +784,9 @@ class CreatePurchaseSettlement(TypedDict):
     additionalInfo: NotRequired[dict[str, str]]
     """Additional information printed on the document (name → value, 1 to 300 characters each). A
     document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and
-    Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours."""
+    Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours. Not accepted with
+    the shared demo issuer (422 demo_issuer_free_text_not_allowed), whose documents carry only
+    the legend "Aviso: DOCUMENTO DE PRUEBA SIN VALIDEZ TRIBUTARIA - SANDBOX FLASHPI"."""
 
     options: NotRequired[DocumentOptions]
     """Delivery options."""
@@ -807,13 +839,15 @@ class WaybillItem(TypedDict):
     """A second code."""
 
     description: str
-    """Description."""
+    """Description. With the shared demo issuer at most 291 characters (422
+    demo_issuer_description_too_long): Flashpi starts it with "PRUEBA - "."""
 
     quantity: str
     """Quantity, up to 6 decimals."""
 
     additionalDetails: NotRequired[dict[str, str]]
-    """Up to 3 extra details (name → value)."""
+    """Up to 3 extra details (name → value). Not accepted with the shared demo issuer (422
+    demo_issuer_free_text_not_allowed)."""
 
 
 WaybillSupportingDocumentType: TypeAlias = Literal[
@@ -897,7 +931,9 @@ class CreateWaybill(TypedDict):
     additionalInfo: NotRequired[dict[str, str]]
     """Additional information printed on the document (name → value, 1 to 300 characters each). A
     document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and
-    Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours."""
+    Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours. Not accepted with
+    the shared demo issuer (422 demo_issuer_free_text_not_allowed), whose documents carry only
+    the legend "Aviso: DOCUMENTO DE PRUEBA SIN VALIDEZ TRIBUTARIA - SANDBOX FLASHPI"."""
 
     options: NotRequired[DocumentOptions]
     """Delivery options."""
@@ -1218,7 +1254,9 @@ class CreateWithholding(TypedDict):
     additionalInfo: NotRequired[dict[str, str]]
     """Additional information printed on the document (name → value, 1 to 300 characters each). A
     document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and
-    Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours."""
+    Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours. Not accepted with
+    the shared demo issuer (422 demo_issuer_free_text_not_allowed), whose documents carry only
+    the legend "Aviso: DOCUMENTO DE PRUEBA SIN VALIDEZ TRIBUTARIA - SANDBOX FLASHPI"."""
 
     options: NotRequired[DocumentOptions]
     """Delivery options."""
@@ -1360,6 +1398,7 @@ DocumentFailureCode: TypeAlias = Literal[
     "certificate_blocked",
     "certificate_revoked",
     "certificate_unusable",
+    "certificate_ruc_mismatch",
     "document_too_large",
     "document_invalid",
     "signing_failed",
@@ -1367,6 +1406,7 @@ DocumentFailureCode: TypeAlias = Literal[
     "sri_authorization_timeout",
     "sri_request_refused",
     "sri_environment_mismatch",
+    "sri_authorization_mismatch",
 ]
 
 
@@ -1704,6 +1744,7 @@ ErrorCode: TypeAlias = Literal[
     "key_scope_mismatch",
     "key_read_only",
     "ip_not_allowed",
+    "live_key_required",
     "invalid_idempotency_key",
     "idempotency_key_reused",
     "idempotency_key_in_progress",
@@ -1733,6 +1774,7 @@ ErrorCode: TypeAlias = Literal[
     "webhook_endpoint_already_verified",
     "webhook_endpoint_not_verified",
     "webhook_delivery_in_progress",
+    "webhook_endpoint_limit_reached",
     "sandbox_not_enabled",
     "demo_issuer_quota_exceeded",
     "demo_issuer_unavailable",
@@ -1928,7 +1970,10 @@ FieldErrorCode: TypeAlias = Literal[
     "url_not_allowed",
     "demo_issuer_test_only",
     "demo_issuer_sequential_not_allowed",
+    "demo_issuer_free_text_not_allowed",
+    "demo_issuer_description_too_long",
     "ruc_mismatch",
+    "certificate_ruc_missing",
 ]
 """Stable machine-readable reason. New codes may be added: treat an unknown one like
 `invalid_value`."""
@@ -2281,7 +2326,8 @@ class ProblemDetails(TypedDict):
 
     limit: NotRequired[int]
     """The daily limit that was reached (`email_resend_limit_reached`,
-    `account_email_limit_reached`, `demo_issuer_quota_exceeded`)."""
+    `account_email_limit_reached`, `demo_issuer_quota_exceeded`), or the most webhook
+    endpoints an account may have in a mode (`webhook_endpoint_limit_reached`)."""
 
     resetsAt: NotRequired[str]
     """When the daily limit resets: the next midnight in Ecuador (the three codes above and
