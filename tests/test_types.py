@@ -11,11 +11,13 @@ from flashpi.types import (
     ApiFieldErrorCode,
     Certificate,
     CertificateEventType,
+    CertificateWarning,
     Document,
     DocumentEventType,
     DocumentListParams,
     DocumentXml,
     Environment,
+    ErrorCode,
     Event,
     EventType,
     FieldError,
@@ -25,7 +27,7 @@ from flashpi.types import (
     WebhookEndpointVerificationEventData,
     WebhookEvent,
 )
-from flashpi.types._generated import EventThinType
+from flashpi.types._generated import CertificateWarningCode, DocumentFailureCode, EventThinType
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACT: dict[str, Any] = json.loads((ROOT / "openapi" / "openapi.json").read_text("utf-8"))
@@ -57,6 +59,31 @@ def test_environments_and_list_params() -> None:
 
 def test_field_error_codes_include_zero_payment() -> None:
     assert "zero_payment" in get_args(FieldErrorCode)
+
+
+# Pyright refuses these assignments if a code is missing from its union.
+NEW_ERROR_CODES: list[ErrorCode] = ["live_key_required", "webhook_endpoint_limit_reached"]
+NEW_FIELD_ERROR_CODES: list[FieldErrorCode] = [
+    "certificate_ruc_missing",
+    "demo_issuer_description_too_long",
+    "demo_issuer_free_text_not_allowed",
+]
+NEW_FAILURE_CODES: list[DocumentFailureCode] = [
+    "certificate_ruc_mismatch",
+    "sri_authorization_mismatch",
+]
+
+
+def test_knows_the_live_key_endpoint_limit_and_certificate_ruc_codes() -> None:
+    assert set(NEW_ERROR_CODES) <= set(get_args(ErrorCode))
+    assert set(NEW_FIELD_ERROR_CODES) <= set(get_args(FieldErrorCode))
+    assert set(NEW_FAILURE_CODES) <= set(get_args(DocumentFailureCode))
+    assert get_args(CertificateWarningCode) == ("ruc_mismatch",)
+
+
+def test_a_certificate_always_carries_its_warnings() -> None:
+    assert "warnings" in Certificate.__required_keys__
+    assert CertificateWarning.__required_keys__ == {"code", "message"}
 
 
 def test_every_public_name_is_exported() -> None:
@@ -92,6 +119,14 @@ def reads_a_thin_webhook(event: ThinWebhookEvent) -> str:
     return event["id"]
 
 
+def reads_certificate_warnings(certificate: Certificate) -> list[str]:
+    assert_type(certificate["warnings"], list[CertificateWarning])
+    for warning in certificate["warnings"]:
+        assert_type(warning["code"], CertificateWarningCode)
+        assert_type(warning["message"], str)
+    return [f"{warning['code']}: {warning['message']}" for warning in certificate["warnings"]]
+
+
 def keeps_field_error_codes_open(error: FieldError, problem: Problem) -> None:
     assert_type(error["code"], ApiFieldErrorCode)
     code: ApiFieldErrorCode = "a_code_added_later"
@@ -125,4 +160,8 @@ def test_the_static_checks_run() -> None:
         {"field": "items[0]", "code": "required", "message": "Required"},
         json.loads('{"code": "not_found"}'),
     )
+    certificate: Certificate = json.loads(
+        '{"id": "1", "status": "accepted", "warnings": [{"code": "ruc_mismatch", "message": "M"}]}'
+    )
+    assert reads_certificate_warnings(certificate) == ["ruc_mismatch: M"]
     assert xml["kind"] is None

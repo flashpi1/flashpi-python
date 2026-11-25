@@ -45,7 +45,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -361,7 +361,7 @@
         ]
       },
       "patch": {
-        "description": "Changes the fields sent; null clears an optional field. The RUC cannot change. Requires an account-scoped (global) API key with read_write access.",
+        "description": "Changes the fields sent; null clears an optional field. The RUC cannot change. A test key (fp_test_) may do it only while the issuer has no live documents; afterwards it needs a live key (403 live_key_required). Requires an account-scoped (global) API key with read_write access.",
         "operationId": "issuersUpdate",
         "parameters": [
           {
@@ -431,7 +431,7 @@
             }
           },
           "403": {
-            "description": "The API key cannot perform this operation: key_scope_mismatch, key_read_only or ip_not_allowed; or its account is suspended (account_suspended).",
+            "description": "The API key cannot perform this operation: key_scope_mismatch, key_read_only or ip_not_allowed; or its account is suspended (account_suspended). live_key_required: the issuer has live documents, so a test key (fp_test_) cannot change it, its establishments or emission points, nor renew its certificate; use a live key (fp_live_).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -492,7 +492,7 @@
         ]
       },
       "delete": {
-        "description": "Deletes the issuer with its establishments, emission points and issuer-scoped API keys. An issuer with documents or certificates cannot be deleted. Requires an account-scoped (global) API key with read_write access.",
+        "description": "Deletes the issuer with its establishments, emission points and issuer-scoped API keys. An issuer with documents or certificates cannot be deleted. A test key (fp_test_) may do it only while the issuer has no live documents; afterwards it needs a live key (403 live_key_required). Requires an account-scoped (global) API key with read_write access.",
         "operationId": "issuersDelete",
         "parameters": [
           {
@@ -535,7 +535,7 @@
             }
           },
           "403": {
-            "description": "The API key cannot perform this operation: key_scope_mismatch, key_read_only or ip_not_allowed; or its account is suspended (account_suspended).",
+            "description": "The API key cannot perform this operation: key_scope_mismatch, key_read_only or ip_not_allowed; or its account is suspended (account_suspended). live_key_required: the issuer has live documents, so a test key (fp_test_) cannot change it, its establishments or emission points, nor renew its certificate; use a live key (fp_live_).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -578,7 +578,7 @@
     },
     "/v1/issuers/{issuerId}/establishments": {
       "post": {
-        "description": "Requires an account-scoped (global) API key with read_write access.",
+        "description": "A test key (fp_test_) may do it only while the issuer has no live documents; afterwards it needs a live key (403 live_key_required). Requires an account-scoped (global) API key with read_write access.",
         "operationId": "establishmentsCreate",
         "parameters": [
           {
@@ -593,7 +593,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -670,7 +670,7 @@
             }
           },
           "403": {
-            "description": "The API key cannot perform this operation: key_scope_mismatch, key_read_only or ip_not_allowed; or its account is suspended (account_suspended).",
+            "description": "The API key cannot perform this operation: key_scope_mismatch, key_read_only or ip_not_allowed; or its account is suspended (account_suspended). live_key_required: the issuer has live documents, so a test key (fp_test_) cannot change it, its establishments or emission points, nor renew its certificate; use a live key (fp_live_).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -945,7 +945,7 @@
         ]
       },
       "patch": {
-        "description": "Changes the address. The code cannot change. Requires an account-scoped (global) API key with read_write access.",
+        "description": "Changes the address. The code cannot change. A test key (fp_test_) may do it only while the issuer has no live documents; afterwards it needs a live key (403 live_key_required). Requires an account-scoped (global) API key with read_write access.",
         "operationId": "establishmentsUpdate",
         "parameters": [
           {
@@ -1023,7 +1023,7 @@
             }
           },
           "403": {
-            "description": "The API key cannot perform this operation: key_scope_mismatch, key_read_only or ip_not_allowed; or its account is suspended (account_suspended).",
+            "description": "The API key cannot perform this operation: key_scope_mismatch, key_read_only or ip_not_allowed; or its account is suspended (account_suspended). live_key_required: the issuer has live documents, so a test key (fp_test_) cannot change it, its establishments or emission points, nor renew its certificate; use a live key (fp_live_).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1084,7 +1084,7 @@
         ]
       },
       "delete": {
-        "description": "Deletes it with its emission points; refused when documents use it. Requires an account-scoped (global) API key with read_write access.",
+        "description": "Deletes it with its emission points; refused when documents use it. A test key (fp_test_) may do it only while the issuer has no live documents; afterwards it needs a live key (403 live_key_required). Requires an account-scoped (global) API key with read_write access.",
         "operationId": "establishmentsDelete",
         "parameters": [
           {
@@ -1135,7 +1135,7 @@
             }
           },
           "403": {
-            "description": "The API key cannot perform this operation: key_scope_mismatch, key_read_only or ip_not_allowed; or its account is suspended (account_suspended).",
+            "description": "The API key cannot perform this operation: key_scope_mismatch, key_read_only or ip_not_allowed; or its account is suspended (account_suspended). live_key_required: the issuer has live documents, so a test key (fp_test_) cannot change it, its establishments or emission points, nor renew its certificate; use a live key (fp_live_).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1178,7 +1178,7 @@
     },
     "/v1/issuers/{issuerId}/establishments/{establishmentId}/emission-points": {
       "post": {
-        "description": "Requires an account-scoped (global) API key with read_write access.",
+        "description": "A test key (fp_test_) may do it only while the issuer has no live documents; afterwards it needs a live key (403 live_key_required). Requires an account-scoped (global) API key with read_write access.",
         "operationId": "emissionPointsCreate",
         "parameters": [
           {
@@ -1201,7 +1201,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -1278,7 +1278,7 @@
             }
           },
           "403": {
-            "description": "The API key cannot perform this operation: key_scope_mismatch, key_read_only or ip_not_allowed; or its account is suspended (account_suspended).",
+            "description": "The API key cannot perform this operation: key_scope_mismatch, key_read_only or ip_not_allowed; or its account is suspended (account_suspended). live_key_required: the issuer has live documents, so a test key (fp_test_) cannot change it, its establishments or emission points, nor renew its certificate; use a live key (fp_live_).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1569,7 +1569,7 @@
         ]
       },
       "delete": {
-        "description": "Refused when documents use it. Requires an account-scoped (global) API key with read_write access.",
+        "description": "Refused when documents use it. A test key (fp_test_) may do it only while the issuer has no live documents; afterwards it needs a live key (403 live_key_required). Requires an account-scoped (global) API key with read_write access.",
         "operationId": "emissionPointsDelete",
         "parameters": [
           {
@@ -1628,7 +1628,7 @@
             }
           },
           "403": {
-            "description": "The API key cannot perform this operation: key_scope_mismatch, key_read_only or ip_not_allowed; or its account is suspended (account_suspended).",
+            "description": "The API key cannot perform this operation: key_scope_mismatch, key_read_only or ip_not_allowed; or its account is suspended (account_suspended). live_key_required: the issuer has live documents, so a test key (fp_test_) cannot change it, its establishments or emission points, nor renew its certificate; use a live key (fp_live_).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1671,7 +1671,7 @@
     },
     "/v1/issuers/{issuerId}/certificates": {
       "post": {
-        "description": "Uploads the .p12 (PKCS#12) file and its password as multipart/form-data. Flashpi encrypts both at once and checks them asynchronously (password, signing key, validity, trusted Ecuadorian certification authority, revocation): the certificate starts `processing`, then becomes `accepted` or `rejected`; follow it with GET. The password is never stored in clear nor returned. Requires an account-scoped (global) API key with read_write access. Test keys manage test certificates and live keys live ones; a certificate of the issuer onboarding serves both modes (`allModes`) and both read it.",
+        "description": "Uploads the .p12 (PKCS#12) file and its password as multipart/form-data. Flashpi encrypts both at once and checks them asynchronously (password, signing key, validity, trusted Ecuadorian certification authority, revocation): the certificate starts `processing`, then becomes `accepted` or `rejected`; follow it with GET. The password is never stored in clear nor returned. The upload is audited (certificate.uploaded) with the API key as the actor. Requires an account-scoped (global) API key with read_write access. Test keys manage test certificates and live keys live ones; a certificate of the issuer onboarding serves both modes (`allModes`) and both read it.",
         "operationId": "certificatesUpload",
         "parameters": [
           {
@@ -1686,7 +1686,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -2060,7 +2060,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -2306,7 +2306,7 @@
     },
     "/v1/issuer-onboardings/{onboardingId}/complete": {
       "post": {
-        "description": "Creates the issuer with the tax profile sent (the same fields as POST /v1/issuers; start from `prefill`), its establishment 001 at the head office and emission point 001; or, when the account already has the certificate's RUC (`existingIssuer`), adds the certificate to that issuer without changing it (the body may be `{}`). The certificate serves test and live documents and starts `processing`: retrieve it under the issuer. The tax profile is the customer's responsibility. Requires an account-scoped (global) API key with read_write access, of either mode: the certificate serves test and live documents.",
+        "description": "Creates the issuer with the tax profile sent (the same fields as POST /v1/issuers; start from `prefill`), its establishment 001 at the head office and emission point 001; or, when the account already has the certificate's RUC (`existingIssuer`), adds the certificate to that issuer without changing it (the body may be `{}`). The certificate serves test and live documents and starts `processing`: retrieve it under the issuer. The tax profile is the customer's responsibility. Audited as issuer.created (a new issuer), certificate.uploaded and issuer_onboarding.completed, with the API key as the actor. A test key (fp_test_) renews only an issuer without live documents (403 live_key_required otherwise). Requires an account-scoped (global) API key with read_write access, of either mode: the certificate serves test and live documents.",
         "operationId": "issuerOnboardingsComplete",
         "parameters": [
           {
@@ -2321,7 +2321,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -2405,7 +2405,7 @@
             }
           },
           "403": {
-            "description": "The API key cannot perform this operation: key_scope_mismatch, key_read_only or ip_not_allowed; or its account is suspended (account_suspended).",
+            "description": "The API key cannot perform this operation: key_scope_mismatch, key_read_only or ip_not_allowed; or its account is suspended (account_suspended). live_key_required: the issuer has live documents, so a test key (fp_test_) cannot change it, its establishments or emission points, nor renew its certificate; use a live key (fp_live_).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2485,7 +2485,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -2686,7 +2686,7 @@
             }
           },
           "422": {
-            "description": "validation_failed (see errors; for example invalid_check_digit, final_consumer_not_allowed, not_in_force, unsupported_character, too_many_additional_fields, amount_mismatch, zero_payment, out_of_range for a sync wait above the maximum, demo_issuer_test_only or demo_issuer_sequential_not_allowed with the demo issuer), total_mismatch (expectedTotal differs from the computed total), document_too_large or document_schema_invalid. Or idempotency_key_reused: the Idempotency-Key was used with a different request.",
+            "description": "validation_failed (see errors; for example invalid_check_digit, final_consumer_not_allowed, not_in_force, unsupported_character, too_many_additional_fields, amount_mismatch, zero_payment, out_of_range for a sync wait above the maximum, demo_issuer_test_only, demo_issuer_sequential_not_allowed, demo_issuer_free_text_not_allowed or demo_issuer_description_too_long with the demo issuer), total_mismatch (expectedTotal differs from the computed total), document_too_large or document_schema_invalid. Or idempotency_key_reused: the Idempotency-Key was used with a different request.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2741,7 +2741,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -2933,7 +2933,7 @@
             }
           },
           "422": {
-            "description": "validation_failed (see errors; for example invalid_check_digit, final_consumer_not_allowed, not_in_force, unsupported_character, too_many_additional_fields, amount_mismatch, zero_payment, out_of_range for a sync wait above the maximum, demo_issuer_test_only or demo_issuer_sequential_not_allowed with the demo issuer), total_mismatch (expectedTotal differs from the computed total), document_too_large or document_schema_invalid. Or idempotency_key_reused: the Idempotency-Key was used with a different request.",
+            "description": "validation_failed (see errors; for example invalid_check_digit, final_consumer_not_allowed, not_in_force, unsupported_character, too_many_additional_fields, amount_mismatch, zero_payment, out_of_range for a sync wait above the maximum, demo_issuer_test_only, demo_issuer_sequential_not_allowed, demo_issuer_free_text_not_allowed or demo_issuer_description_too_long with the demo issuer), total_mismatch (expectedTotal differs from the computed total), document_too_large or document_schema_invalid. Or idempotency_key_reused: the Idempotency-Key was used with a different request.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2988,7 +2988,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -3182,7 +3182,7 @@
             }
           },
           "422": {
-            "description": "validation_failed (see errors; for example invalid_check_digit, final_consumer_not_allowed, not_in_force, unsupported_character, too_many_additional_fields, amount_mismatch, zero_payment, out_of_range for a sync wait above the maximum, demo_issuer_test_only or demo_issuer_sequential_not_allowed with the demo issuer), total_mismatch (expectedTotal differs from the computed total), document_too_large or document_schema_invalid. Or idempotency_key_reused: the Idempotency-Key was used with a different request.",
+            "description": "validation_failed (see errors; for example invalid_check_digit, final_consumer_not_allowed, not_in_force, unsupported_character, too_many_additional_fields, amount_mismatch, zero_payment, out_of_range for a sync wait above the maximum, demo_issuer_test_only, demo_issuer_sequential_not_allowed, demo_issuer_free_text_not_allowed or demo_issuer_description_too_long with the demo issuer), total_mismatch (expectedTotal differs from the computed total), document_too_large or document_schema_invalid. Or idempotency_key_reused: the Idempotency-Key was used with a different request.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3237,7 +3237,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -3432,7 +3432,7 @@
             }
           },
           "422": {
-            "description": "validation_failed (see errors; for example invalid_check_digit, final_consumer_not_allowed, not_in_force, unsupported_character, too_many_additional_fields, amount_mismatch, zero_payment, out_of_range for a sync wait above the maximum, demo_issuer_test_only or demo_issuer_sequential_not_allowed with the demo issuer), total_mismatch (expectedTotal differs from the computed total), document_too_large or document_schema_invalid. Or idempotency_key_reused: the Idempotency-Key was used with a different request.",
+            "description": "validation_failed (see errors; for example invalid_check_digit, final_consumer_not_allowed, not_in_force, unsupported_character, too_many_additional_fields, amount_mismatch, zero_payment, out_of_range for a sync wait above the maximum, demo_issuer_test_only, demo_issuer_sequential_not_allowed, demo_issuer_free_text_not_allowed or demo_issuer_description_too_long with the demo issuer), total_mismatch (expectedTotal differs from the computed total), document_too_large or document_schema_invalid. Or idempotency_key_reused: the Idempotency-Key was used with a different request.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3487,7 +3487,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -3683,7 +3683,7 @@
             }
           },
           "422": {
-            "description": "validation_failed (see errors; for example invalid_check_digit, final_consumer_not_allowed, not_in_force, unsupported_character, too_many_additional_fields, amount_mismatch, zero_payment, out_of_range for a sync wait above the maximum, demo_issuer_test_only or demo_issuer_sequential_not_allowed with the demo issuer), total_mismatch (expectedTotal differs from the computed total), document_too_large or document_schema_invalid. Or idempotency_key_reused: the Idempotency-Key was used with a different request.",
+            "description": "validation_failed (see errors; for example invalid_check_digit, final_consumer_not_allowed, not_in_force, unsupported_character, too_many_additional_fields, amount_mismatch, zero_payment, out_of_range for a sync wait above the maximum, demo_issuer_test_only, demo_issuer_sequential_not_allowed, demo_issuer_free_text_not_allowed or demo_issuer_description_too_long with the demo issuer), total_mismatch (expectedTotal differs from the computed total), document_too_large or document_schema_invalid. Or idempotency_key_reused: the Idempotency-Key was used with a different request.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3738,7 +3738,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -3947,7 +3947,7 @@
             }
           },
           "422": {
-            "description": "validation_failed (see errors; for example invalid_check_digit, final_consumer_not_allowed, not_in_force, unsupported_character, too_many_additional_fields, amount_mismatch, zero_payment, out_of_range for a sync wait above the maximum, demo_issuer_test_only or demo_issuer_sequential_not_allowed with the demo issuer), total_mismatch (expectedTotal differs from the computed total), document_too_large or document_schema_invalid. Or idempotency_key_reused: the Idempotency-Key was used with a different request.",
+            "description": "validation_failed (see errors; for example invalid_check_digit, final_consumer_not_allowed, not_in_force, unsupported_character, too_many_additional_fields, amount_mismatch, zero_payment, out_of_range for a sync wait above the maximum, demo_issuer_test_only, demo_issuer_sequential_not_allowed, demo_issuer_free_text_not_allowed or demo_issuer_description_too_long with the demo issuer), total_mismatch (expectedTotal differs from the computed total), document_too_large or document_schema_invalid. Or idempotency_key_reused: the Idempotency-Key was used with a different request.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4262,7 +4262,7 @@
     },
     "/v1/documents/{documentId}/xml": {
       "get": {
-        "description": "The most advanced XML available: the authorized XML once the SRI authorized the document, else the signed XML, else the unsigned XML Flashpi built. The `Flashpi-Xml-Kind` header says which one (authorized, signed or unsigned). Any API key can read (read_only included); an issuer-scoped key only sees its issuer. Test keys see test documents and live keys live documents.",
+        "description": "The most advanced XML available: the authorized XML once the SRI authorized the document, else the signed XML, else the unsigned XML Flashpi built. A document of the shared demo issuer never gives out its signed XML: until the SRI authorizes it, the answer is its unsigned XML. The `Flashpi-Xml-Kind` header says which one (authorized, signed or unsigned). Any API key can read (read_only included); an issuer-scoped key only sees its issuer. Test keys see test documents and live keys live documents.",
         "operationId": "documentsGetXml",
         "parameters": [
           {
@@ -4465,7 +4465,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -4630,14 +4630,14 @@
     },
     "/v1/webhook-endpoints": {
       "post": {
-        "description": "Registers a public HTTPS URL for the chosen event types. The endpoint starts `pending_verification`: Flashpi POSTs a signed `webhook_endpoint.verification` body with a `challenge`, and the endpoint must answer 2xx echoing it (`{\"challenge\": \"...\"}`, or the challenge as plain text) before it receives events. Read its signing secret with GET .../secret. Requires an account-scoped (global) API key with read_write access. Test keys manage the endpoints of test events and live keys those of live events.",
+        "description": "Registers a public HTTPS URL for the chosen event types. The endpoint starts `pending_verification`: Flashpi POSTs a signed `webhook_endpoint.verification` body with a `challenge`, and the endpoint must answer 2xx echoing it (`{\"challenge\": \"...\"}`, or the challenge as plain text) before it receives events. Read its signing secret with GET .../secret. Requires an account-scoped (global) API key with read_write access. Test keys manage the endpoints of test events and live keys those of live events. Changes are audited with the API key as the actor. Every owner of the account gets an email when a live endpoint is created or gets a new URL: its destination (scheme, host and port), the API key, when and from which IP address.",
         "operationId": "webhookEndpointsCreate",
         "parameters": [
           {
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -4724,7 +4724,7 @@
             }
           },
           "409": {
-            "description": "idempotency_key_in_progress: a request with this Idempotency-Key is still running.",
+            "description": "webhook_endpoint_limit_reached: the account already has the most endpoints a mode may have (`limit`, 20 by default); delete one first. Or idempotency_key_in_progress: a request with this Idempotency-Key is still running.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4953,7 +4953,7 @@
         ]
       },
       "patch": {
-        "description": "Changes the fields sent. A new URL goes back to `pending_verification` and gets a new handshake; `disabled: true` stops deliveries (pending ones end) and `disabled: false` enables the endpoint again. Requires an account-scoped (global) API key with read_write access. Test keys manage the endpoints of test events and live keys those of live events.",
+        "description": "Changes the fields sent. A new URL goes back to `pending_verification` and gets a new handshake; `disabled: true` stops deliveries (pending ones end) and `disabled: false` enables the endpoint again. Requires an account-scoped (global) API key with read_write access. Test keys manage the endpoints of test events and live keys those of live events. Changes are audited with the API key as the actor. Every owner of the account gets an email when a live endpoint is created or gets a new URL: its destination (scheme, host and port), the API key, when and from which IP address.",
         "operationId": "webhookEndpointsUpdate",
         "parameters": [
           {
@@ -5081,6 +5081,21 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "rate_limited: the endpoint started the most verifications an hour allows (10 by default: its creation, each new URL, each time it is enabled again and each POST .../verify); Retry-After says when the hour ends.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            }
           }
         },
         "security": [
@@ -5170,7 +5185,7 @@
     },
     "/v1/webhook-endpoints/{endpointId}/secret": {
       "get": {
-        "description": "The whsec_ secret that signs the deliveries (Standard Webhooks, HMAC-SHA256). It is stored encrypted and only returned here. Requires an account-scoped (global) API key with read_write access. Test keys manage the endpoints of test events and live keys those of live events.",
+        "description": "The whsec_ secret that signs the deliveries (Standard Webhooks, HMAC-SHA256). It is stored encrypted and only returned here; reading it is audited. Requires an account-scoped (global) API key with read_write access. Test keys manage the endpoints of test events and live keys those of live events.",
         "operationId": "webhookEndpointsSecret",
         "parameters": [
           {
@@ -5268,7 +5283,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -5433,7 +5448,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -5536,6 +5551,21 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited: the endpoint started the most verifications an hour allows (10 by default: its creation, each new URL, each time it is enabled again and each POST .../verify); Retry-After says when the hour ends.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
               }
             }
           }
@@ -5843,7 +5873,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
+            "description": "Makes the request safe to retry: 1 to 255 visible ASCII characters (a UUID works well), remembered for 24 hours per account and mode. A retry with the same key and the same request returns the first successful response again, with the header `Idempotent-Replayed: true`, to any key of the account and mode whose scope covers it: an issuer-scoped key gets 403 key_scope_mismatch for another issuer's document, as without the header. The same key with a different request gets 422 idempotency_key_reused; while the first request still runs, 409 idempotency_key_in_progress. A failed request does not keep its key.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -6311,6 +6341,7 @@
           "key_scope_mismatch",
           "key_read_only",
           "ip_not_allowed",
+          "live_key_required",
           "invalid_idempotency_key",
           "idempotency_key_reused",
           "idempotency_key_in_progress",
@@ -6340,6 +6371,7 @@
           "webhook_endpoint_already_verified",
           "webhook_endpoint_not_verified",
           "webhook_delivery_in_progress",
+          "webhook_endpoint_limit_reached",
           "sandbox_not_enabled",
           "demo_issuer_quota_exceeded",
           "demo_issuer_unavailable",
@@ -6382,7 +6414,10 @@
           "url_not_allowed",
           "demo_issuer_test_only",
           "demo_issuer_sequential_not_allowed",
-          "ruc_mismatch"
+          "demo_issuer_free_text_not_allowed",
+          "demo_issuer_description_too_long",
+          "ruc_mismatch",
+          "certificate_ruc_missing"
         ],
         "description": "Stable machine-readable reason. New codes may be added: treat an unknown one like `invalid_value`."
       },
@@ -6472,7 +6507,7 @@
           },
           "limit": {
             "type": "integer",
-            "description": "The daily limit that was reached (`email_resend_limit_reached`, `account_email_limit_reached`, `demo_issuer_quota_exceeded`)."
+            "description": "The daily limit that was reached (`email_resend_limit_reached`, `account_email_limit_reached`, `demo_issuer_quota_exceeded`), or the most webhook endpoints an account may have in a mode (`webhook_endpoint_limit_reached`)."
           },
           "resetsAt": {
             "type": "string",
@@ -7170,6 +7205,28 @@
           "message"
         ]
       },
+      "CertificateWarning": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "ruc_mismatch"
+            ],
+            "example": "ruc_mismatch",
+            "description": "`ruc_mismatch`: a test certificate that is not for the issuer's RUC. It signs test documents only and does not count for live API keys; in live mode such a certificate is rejected (`rejection.code` `ruc_mismatch`)."
+          },
+          "message": {
+            "type": "string",
+            "example": "This certificate is not for the issuer's RUC: it signs test documents only and does not count for live API keys. A certificate supports the RUC it states or, if it states only a cédula, that cédula followed by 001. Upload a certificate of this RUC to sign live documents."
+          }
+        },
+        "description": "Something to fix about an accepted certificate that does not stop it signing.",
+        "required": [
+          "code",
+          "message"
+        ]
+      },
       "Certificate": {
         "type": "object",
         "properties": {
@@ -7276,6 +7333,13 @@
               }
             ]
           },
+          "warnings": {
+            "description": "Warnings about an accepted certificate (empty when there are none). A test certificate that is not for the issuer's RUC is accepted with `ruc_mismatch`.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CertificateWarning"
+            }
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -7302,6 +7366,7 @@
           "ruc",
           "revocation",
           "rejection",
+          "warnings",
           "createdAt",
           "updatedAt"
         ]
@@ -7846,7 +7911,7 @@
             "type": "string",
             "pattern": "^[0-9]{10}001$",
             "example": "1712345678001",
-            "description": "Required when the RUC did not come from the certificate (`rucNeedsConfirmation`): the proposed RUC or another one whose first 10 digits are the holder's cédula. Otherwise it may be left out, and must be the certificate's RUC when sent (422 `ruc_mismatch`)."
+            "description": "Required when the RUC did not come from the certificate (`rucNeedsConfirmation`), and then it must be the proposed RUC (for a certificate that states only a cédula, that cédula followed by 001). Otherwise it may be left out, and must be the certificate's RUC when sent. Any other RUC gets 422 `ruc_mismatch`."
           },
           "legalName": {
             "type": "string",
@@ -7963,7 +8028,7 @@
             "description": "Where the authorized document is emailed (see `options.sendEmail`).",
             "example": "compras@example.com",
             "format": "email",
-            "maxLength": 320
+            "maxLength": 254
           }
         },
         "description": "The buyer of an invoice, credit or debit note, or the supplier of a purchase settlement.",
@@ -8020,7 +8085,7 @@
           },
           "description": {
             "type": "string",
-            "description": "Description.",
+            "description": "Description. With the shared demo issuer at most 291 characters (422 demo_issuer_description_too_long): Flashpi starts it with \"PRUEBA - \".",
             "example": "Ground coffee 500 g",
             "minLength": 1,
             "maxLength": 300
@@ -8067,7 +8132,7 @@
           },
           "additionalDetails": {
             "type": "object",
-            "description": "Up to 3 extra details printed with the line (name → value, 1 to 300 characters).",
+            "description": "Up to 3 extra details printed with the line (name → value, 1 to 300 characters). Not accepted with the shared demo issuer (422 demo_issuer_free_text_not_allowed).",
             "example": {
               "Batch": "L-2026-10"
             },
@@ -8168,7 +8233,7 @@
           },
           "additionalInfo": {
             "type": "object",
-            "description": "Additional information printed on the document (name → value, 1 to 300 characters each). A document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours.",
+            "description": "Additional information printed on the document (name → value, 1 to 300 characters each). A document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours. Not accepted with the shared demo issuer (422 demo_issuer_free_text_not_allowed), whose documents carry only the legend \"Aviso: DOCUMENTO DE PRUEBA SIN VALIDEZ TRIBUTARIA - SANDBOX FLASHPI\".",
             "example": {
               "Order": "PO-4812"
             },
@@ -8574,13 +8639,15 @@
               "certificate_blocked",
               "certificate_revoked",
               "certificate_unusable",
+              "certificate_ruc_mismatch",
               "document_too_large",
               "document_invalid",
               "signing_failed",
               "sri_unavailable",
               "sri_authorization_timeout",
               "sri_request_refused",
-              "sri_environment_mismatch"
+              "sri_environment_mismatch",
+              "sri_authorization_mismatch"
             ],
             "example": "certificate_required"
           },
@@ -8829,7 +8896,7 @@
           },
           "additionalInfo": {
             "type": "object",
-            "description": "Additional information printed on the document (name → value, 1 to 300 characters each). A document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours.",
+            "description": "Additional information printed on the document (name → value, 1 to 300 characters each). A document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours. Not accepted with the shared demo issuer (422 demo_issuer_free_text_not_allowed), whose documents carry only the legend \"Aviso: DOCUMENTO DE PRUEBA SIN VALIDEZ TRIBUTARIA - SANDBOX FLASHPI\".",
             "example": {
               "Order": "PO-4812"
             },
@@ -8903,7 +8970,7 @@
         "properties": {
           "description": {
             "type": "string",
-            "description": "Reason.",
+            "description": "Reason. With the shared demo issuer at most 291 characters (422 demo_issuer_description_too_long): Flashpi starts it with \"PRUEBA - \".",
             "example": "Late payment interest",
             "minLength": 1,
             "maxLength": 300
@@ -8973,7 +9040,7 @@
           },
           "additionalInfo": {
             "type": "object",
-            "description": "Additional information printed on the document (name → value, 1 to 300 characters each). A document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours.",
+            "description": "Additional information printed on the document (name → value, 1 to 300 characters each). A document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours. Not accepted with the shared demo issuer (422 demo_issuer_free_text_not_allowed), whose documents carry only the legend \"Aviso: DOCUMENTO DE PRUEBA SIN VALIDEZ TRIBUTARIA - SANDBOX FLASHPI\".",
             "example": {
               "Order": "PO-4812"
             },
@@ -9080,7 +9147,7 @@
           },
           "additionalInfo": {
             "type": "object",
-            "description": "Additional information printed on the document (name → value, 1 to 300 characters each). A document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours.",
+            "description": "Additional information printed on the document (name → value, 1 to 300 characters each). A document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours. Not accepted with the shared demo issuer (422 demo_issuer_free_text_not_allowed), whose documents carry only the legend \"Aviso: DOCUMENTO DE PRUEBA SIN VALIDEZ TRIBUTARIA - SANDBOX FLASHPI\".",
             "example": {
               "Order": "PO-4812"
             },
@@ -9235,7 +9302,7 @@
           },
           "description": {
             "type": "string",
-            "description": "Description.",
+            "description": "Description. With the shared demo issuer at most 291 characters (422 demo_issuer_description_too_long): Flashpi starts it with \"PRUEBA - \".",
             "example": "Ground coffee 500 g",
             "minLength": 1,
             "maxLength": 300
@@ -9248,7 +9315,7 @@
           },
           "additionalDetails": {
             "type": "object",
-            "description": "Up to 3 extra details (name → value).",
+            "description": "Up to 3 extra details (name → value). Not accepted with the shared demo issuer (422 demo_issuer_free_text_not_allowed).",
             "example": {
               "Batch": "L-2026-10"
             },
@@ -9380,7 +9447,7 @@
           },
           "additionalInfo": {
             "type": "object",
-            "description": "Additional information printed on the document (name → value, 1 to 300 characters each). A document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours.",
+            "description": "Additional information printed on the document (name → value, 1 to 300 characters each). A document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours. Not accepted with the shared demo issuer (422 demo_issuer_free_text_not_allowed), whose documents carry only the legend \"Aviso: DOCUMENTO DE PRUEBA SIN VALIDEZ TRIBUTARIA - SANDBOX FLASHPI\".",
             "example": {
               "Order": "PO-4812"
             },
@@ -9504,7 +9571,7 @@
             "description": "Where the authorized receipt is emailed (see `options.sendEmail`).",
             "example": "facturacion@example.com",
             "format": "email",
-            "maxLength": 320
+            "maxLength": 254
           }
         },
         "description": "The supplier whose taxes are withheld.",
@@ -9887,7 +9954,7 @@
           },
           "additionalInfo": {
             "type": "object",
-            "description": "Additional information printed on the document (name → value, 1 to 300 characters each). A document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours.",
+            "description": "Additional information printed on the document (name → value, 1 to 300 characters each). A document carries at most 15 fields including the legends Flashpi adds (RUC Proveedor, and Gran Contribuyente for large taxpayers), so at most 13 or 14 of yours. Not accepted with the shared demo issuer (422 demo_issuer_free_text_not_allowed), whose documents carry only the legend \"Aviso: DOCUMENTO DE PRUEBA SIN VALIDEZ TRIBUTARIA - SANDBOX FLASHPI\".",
             "example": {
               "Order": "PO-4812"
             },

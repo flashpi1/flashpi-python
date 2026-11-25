@@ -129,7 +129,8 @@ class AuthenticationError(APIError):
 
 
 class PermissionDeniedError(APIError):
-    """403: the key may not do this (read-only, another issuer, IP allowlist, suspended account)."""
+    """403: the key may not do this (read-only, another issuer, IP allowlist, suspended account,
+    or a test key changing an issuer that has live documents: `live_key_required`)."""
 
 
 class NotFoundError(APIError):
