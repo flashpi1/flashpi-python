@@ -1,6 +1,6 @@
 [project]
 name = "flashpi"
-version = "0.2.0"
+version = "0.2.1"
 description = "The official Python SDK for Flashpi, the electronic invoicing API for Ecuador's SRI."
 readme = "README.md"
 requires-python = ">=3.11"

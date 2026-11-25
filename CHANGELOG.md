@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/flashpi1/flashpi-python/compare/v0.2.0...v0.2.1) (2026-11-25)
+
+
+### Bug fixes
+
+* **types:** export CertificateWarning from flashpi.types ([63663cb](https://github.com/flashpi1/flashpi-python/commit/63663cbb2058c47a1a053234098d6949399c4128))
+* **types:** sync the API contract of 2026-11-24 ([6dc5ee7](https://github.com/flashpi1/flashpi-python/commit/6dc5ee7d1e63a39741782b192bdb86ed933a23b2))
+
 ## [0.2.0](https://github.com/flashpi1/flashpi-python/compare/v0.1.0...v0.2.0) (2026-11-18)
 
 
